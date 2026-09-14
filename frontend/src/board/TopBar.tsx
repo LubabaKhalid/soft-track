@@ -1,6 +1,9 @@
 import type { ComponentProps } from 'react'
 
 import { FilterBar } from '@/board/FilterBar'
+import { toQueryParams } from '@/board/filters'
+import { AXIOS_INSTANCE } from '@/api/client'
+import { useState } from 'react'
 import type { BoardFilters } from '@/board/filters'
 import type { BoardGrouping } from '@/board/grouping'
 import { type BoardSort, SORT_OPTIONS } from '@/board/sorting'
@@ -190,6 +193,8 @@ export function TopBar({
           onOpenIssue={onOpenNotifiedIssue}
         />
 
+        <ExportCsvButton filters={filters} />
+
         {onNewIssue ? (
           <button type="button" onClick={onNewIssue} className="btn btn-primary">
             <Icon name="plus" size={14} strokeWidth={2.2} />
@@ -206,5 +211,46 @@ export function TopBar({
         )}
       </div>
     </header>
+  )
+}
+
+function ExportCsvButton({ filters }: { filters: any }) {
+  const { team } = useTeamContext()
+  const [loading, setLoading] = useState(false)
+
+  const doExport = async () => {
+    if (!team) return
+    setLoading(true)
+    try {
+      const qp = toQueryParams(filters)
+      const params = new URLSearchParams()
+      Object.entries(qp).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) params.set(k, String(v))
+      })
+      const url = `/teams/${team.id}/issues/export?${params.toString()}`
+      const resp = await AXIOS_INSTANCE.get(url, { responseType: 'blob' })
+      const objectUrl = URL.createObjectURL(resp.data)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = 'issues.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={doExport}
+      className="btn btn-ghost btn-sm"
+      disabled={loading}
+      aria-disabled={loading}
+    >
+      <Icon name="download" size={14} />
+      <span className="hidden sm:inline">Export CSV</span>
+    </button>
   )
 }

@@ -336,36 +336,19 @@ def list_issues(
     fifty most recent", which is a different and much less useful thing, and
     silently so.
     """
-    get_team_or_404(team_id, session)
-    require_team_member(team_id, current_user, session)
-
-    filters = [Issue.team_id == team_id]
-    if project_id is not None:
-        filters.append(Issue.project_id == project_id)
-    if status_id is not None:
-        filters.append(Issue.status_id == status_id)
-    if priority is not None:
-        filters.append(Issue.priority == priority)
-    if unassigned:
-        # Distinct from leaving assignee_id null, which means "anybody".
-        filters.append(Issue.assignee_id == None)  # noqa: E711 -- SQL IS NULL
-    elif assignee_id is not None:
-        filters.append(Issue.assignee_id == assignee_id)
-    if label_id is not None:
-        # A subquery rather than a join: an issue joined to its label links
-        # would come back once per matching link, and the count above would
-        # count it that many times.
-        filters.append(
-            Issue.id.in_(
-                select(IssueLabelLink.issue_id).where(
-                    IssueLabelLink.label_id == label_id
-                )
-            )
-        )
-    if parent_id is not None:
-        filters.append(Issue.parent_id == parent_id)
-    if cycle_id is not None:
-        filters.append(Issue.cycle_id == cycle_id)
+    filters = build_issue_filters(
+        session,
+        current_user,
+        team_id,
+        project_id=project_id,
+        status_id=status_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        unassigned=unassigned,
+        label_id=label_id,
+        parent_id=parent_id,
+        cycle_id=cycle_id,
+    )
     if type is not None:
         filters.append(Issue.type == type)
     if due is not None:
@@ -395,6 +378,87 @@ def list_issues(
         limit=limit,
         offset=offset,
     )
+
+
+def build_issue_filters(
+    session: Session,
+    current_user: User,
+    team_id: int,
+    project_id: Optional[int] = None,
+    status_id: Optional[int] = None,
+    priority: Optional[IssuePriority] = None,
+    assignee_id: Optional[int] = None,
+    unassigned: bool = False,
+    label_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    cycle_id: Optional[int] = None,
+) -> list:
+    """Build SQLAlchemy filter list for issues and enforce team membership.
+
+    This centralises filter logic so list and export endpoints use identical
+    behaviour.
+    """
+    get_team_or_404(team_id, session)
+    require_team_member(team_id, current_user, session)
+
+    filters = [Issue.team_id == team_id]
+    if project_id is not None:
+        filters.append(Issue.project_id == project_id)
+    if status_id is not None:
+        filters.append(Issue.status_id == status_id)
+    if priority is not None:
+        filters.append(Issue.priority == priority)
+    if unassigned:
+        filters.append(Issue.assignee_id == None)  # noqa: E711 -- SQL IS NULL
+    elif assignee_id is not None:
+        filters.append(Issue.assignee_id == assignee_id)
+    if label_id is not None:
+        filters.append(
+            Issue.id.in_(
+                select(IssueLabelLink.issue_id).where(IssueLabelLink.label_id == label_id)
+            )
+        )
+    if parent_id is not None:
+        filters.append(Issue.parent_id == parent_id)
+    if cycle_id is not None:
+        filters.append(Issue.cycle_id == cycle_id)
+
+    return filters
+
+
+def export_issues(
+    session: Session,
+    current_user: User,
+    team_id: int,
+    project_id: Optional[int] = None,
+    status_id: Optional[int] = None,
+    priority: Optional[IssuePriority] = None,
+    assignee_id: Optional[int] = None,
+    unassigned: bool = False,
+    label_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    cycle_id: Optional[int] = None,
+) -> list[IssueRead]:
+    """Return all matching issues (unpaginated) as IssueRead objects.
+
+    The API layer may stream these into CSV without reimplementing filters.
+    """
+    filters = build_issue_filters(
+        session,
+        current_user,
+        team_id,
+        project_id=project_id,
+        status_id=status_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        unassigned=unassigned,
+        label_id=label_id,
+        parent_id=parent_id,
+        cycle_id=cycle_id,
+    )
+
+    issues = session.exec(select(Issue).where(*filters).order_by(Issue.number.desc())).all()
+    return _expand_issues(list(issues), session)
 
 
 def get_issue(session: Session, current_user: User, issue_id: int) -> IssueRead:

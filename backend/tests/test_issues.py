@@ -181,3 +181,94 @@ def test_deleting_a_bare_issue(client, issue, team):
     assert (
         client.get(f"/issues/{issue['id']}", headers=team["headers"]).status_code == 404
     )
+
+
+def test_export_issues_csv_basic(client, team):
+    # Create an issue with commas, quotes and newlines to test CSV escaping
+    special = client.post(
+        f"/teams/{team['team']['id']}/issues",
+        json={
+            "title": 'Title, with comma "quote" and \n newline',
+            "description": 'Desc with "quote", comma, and\nnew line',
+        },
+        headers=team["headers"],
+    ).json()
+
+    response = client.get(
+        f"/teams/{team['team']['id']}/issues/export", headers=team["headers"]
+    )
+    assert response.status_code == 200
+    assert response.headers.get("content-type", "").split(";")[0] == "text/csv"
+
+    # Ensure BOM present and CSV headers
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    text = response.content.decode("utf-8-sig")
+    import io, csv
+
+    rows = list(csv.reader(io.StringIO(text)))
+    assert rows[0] == [
+        "key",
+        "title",
+        "description",
+        "status",
+        "priority",
+        "assignee",
+        "labels",
+        "project",
+        "cycle",
+        "estimate",
+        "creator",
+        "created",
+        "updated",
+        "parent_key",
+    ]
+
+    # Find our special issue row by title
+    titles = [r[1] for r in rows[1:]]
+    assert any('Title, with comma "quote"' in t for t in titles)
+
+    # `created` and `updated` read as plain spreadsheet dates: no `T`, no
+    # microseconds.
+    import re
+
+    for row in rows[1:]:
+        created, updated = row[11], row[12]
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", created), created
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", updated), updated
+
+
+def test_non_member_cannot_export(client, issue, auth):
+    outsider = auth(email="outsider2@softtrack.dev")
+    response = client.get(f"/teams/{issue['team_id']}/issues/export", headers=outsider["headers"])
+    assert response.status_code == 403
+
+
+def test_export_timestamps_are_formatted_without_losing_the_stored_value(
+    client, issue, team, session
+):
+    """The CSV is reformatted; the row behind it keeps its full precision."""
+    import csv
+    import io
+
+    from lib_softtrack.tables import Issue
+
+    stored = session.get(Issue, issue["id"])
+    response = client.get(
+        f"/teams/{issue['team_id']}/issues/export", headers=team["headers"]
+    )
+    assert response.status_code == 200
+
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig"))))
+    row = next(r for r in rows[1:] if r[0] == issue["identifier"])
+
+    assert row[11] == stored.created_at.strftime("%Y-%m-%d %H:%M:%S")
+    assert row[12] == stored.updated_at.strftime("%Y-%m-%d %H:%M:%S")
+    assert "T" not in row[11] and "." not in row[11]
+    # The stored timestamp still carries the microseconds the CSV drops.
+    assert stored.created_at.isoformat() != row[11]
+
+
+def test_export_timestamp_helper_handles_a_missing_value():
+    from app_softtrack.issues import _csv_timestamp
+
+    assert _csv_timestamp(None) == ""

@@ -37,8 +37,30 @@ from web import get_session
 
 
 @event.listens_for(Engine, "connect")
-def _enforce_sqlite_foreign_keys(dbapi_connection, _record):
-    """Make SQLite behave like Postgres about referential integrity."""
+def _enforce_sqlite_foreign_keys(dbapi_connection, connection_record):
+    """Make SQLite behave like Postgres about referential integrity.
+
+    Prefer checking the SQLAlchemy engine dialect when available so this
+    listener is a no-op for Postgres connections in the Docker test
+    environment. If the dialect cannot be determined, fall back to a
+    DB-API-level check for the stdlib `sqlite3` connection object.
+    """
+    # Determine the dialect from the SQLAlchemy connection record.
+    try:
+        conn = getattr(connection_record, "driver_connection", None)
+        engine = getattr(conn, "engine", None)
+        if engine is not None:
+            if engine.dialect.name != "sqlite":
+                return
+    except Exception:
+        # If anything goes wrong, fall back to DBAPI check below.
+        pass
+
+    # Only SQLite understands the PRAGMA; if the DBAPI connection is not
+    # the stdlib `sqlite3` connection then skip executing the PRAGMA.
+    if dbapi_connection.__class__.__module__ != "sqlite3":
+        return
+
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()

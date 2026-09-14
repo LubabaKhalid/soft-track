@@ -18,6 +18,7 @@ export type IconName =
   | 'check'
   | 'link'
   | 'upload'
+  | 'download'
   | 'logout'
   | 'sparkle'
   | 'command'

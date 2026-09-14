@@ -132,3 +132,31 @@ def test_a_filter_sees_past_the_first_page(client, board):
     ).json()
     assert body["total"] == 1
     assert [item["id"] for item in body["items"]] == [match["id"]]
+
+
+def test_export_respects_filters_and_is_unpaginated(client, board):
+    # Create a matching issue and many filler issues so the match falls off
+    match = client.post(
+        f"/teams/{board['team_id']}/issues",
+        json={"title": "needle for export", "priority": "urgent"},
+        headers=board["headers"],
+    ).json()
+    for n in range(60):
+        client.post(
+            f"/teams/{board['team_id']}/issues",
+            json={"title": f"filler {n}"},
+            headers=board["headers"],
+        )
+
+    response = client.get(
+        f"/teams/{board['team_id']}/issues/export?priority=urgent",
+        headers=board["headers"],
+    )
+    assert response.status_code == 200
+    import io, csv
+
+    text = response.content.decode("utf-8-sig")
+    rows = list(csv.reader(io.StringIO(text)))
+    # One header row + one matching issue
+    assert len(rows) == 2
+    assert rows[1][1] == "needle for export"
