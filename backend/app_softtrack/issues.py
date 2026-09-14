@@ -186,7 +186,9 @@ def export_issues_csv(
         False, description="Only issues with nobody assigned. Overrides assignee_id."
     ),
     label_id: Optional[int] = Query(None, description="Only issues with this label."),
-    parent_id: Optional[int] = Query(None, description="Only sub-issues of this issue."),
+    parent_id: Optional[int] = Query(
+        None, description="Only sub-issues of this issue."
+    ),
     cycle_id: Optional[int] = Query(None, description="Only issues in this cycle."),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -238,7 +240,9 @@ def export_issues_csv(
             if issue.assignee is not None:
                 assignee = issue.assignee.username or issue.assignee.email
 
-            labels = ";".join([label.name for label in issue.labels]) if issue.labels else ""
+            labels = (
+                ";".join([label.name for label in issue.labels]) if issue.labels else ""
+            )
 
             project_name = ""
             if issue.project_id is not None:
