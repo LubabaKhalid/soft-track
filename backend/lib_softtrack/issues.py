@@ -348,7 +348,9 @@ def build_issue_filters(
     if label_id is not None:
         filters.append(
             Issue.id.in_(
-                select(IssueLabelLink.issue_id).where(IssueLabelLink.label_id == label_id)
+                select(IssueLabelLink.issue_id).where(
+                    IssueLabelLink.label_id == label_id
+                )
             )
         )
     if parent_id is not None:
@@ -390,7 +392,9 @@ def export_issues(
         cycle_id=cycle_id,
     )
 
-    issues = session.exec(select(Issue).where(*filters).order_by(Issue.number.desc())).all()
+    issues = session.exec(
+        select(Issue).where(*filters).order_by(Issue.number.desc())
+    ).all()
     return _expand_issues(list(issues), session)
 
 

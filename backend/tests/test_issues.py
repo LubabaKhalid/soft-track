@@ -191,7 +191,9 @@ def test_export_issues_csv_basic(client, team):
 
 def test_non_member_cannot_export(client, issue, auth):
     outsider = auth(email="outsider2@softtrack.dev")
-    response = client.get(f"/teams/{issue['team_id']}/issues/export", headers=outsider["headers"])
+    response = client.get(
+        f"/teams/{issue['team_id']}/issues/export", headers=outsider["headers"]
+    )
     assert response.status_code == 403
 
 
