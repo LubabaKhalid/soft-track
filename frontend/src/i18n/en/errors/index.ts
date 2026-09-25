@@ -27,4 +27,8 @@ export const errors = {
   last_site_admin: 'This instance needs at least one active site administrator.',
   cannot_deactivate_self: 'You cannot deactivate your own account.',
   cannot_demote_self: 'You cannot remove your own site admin access.',
+
+  // Whose comment it is (#93).
+  not_your_comment:
+    'Only the person who wrote a comment can edit it. Its author or a team admin can delete it.',
 } as const satisfies Partial<Record<ErrorCode, string>>
