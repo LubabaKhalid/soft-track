@@ -1,16 +1,22 @@
-from datetime import date
+import csv
+import io
+from collections.abc import Iterable, Iterator
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app_softtrack.guards import team_writer
 from lib_identity.identity import get_current_user
+from lib_identity.models.identity import UserPublic
 from lib_softtrack import estimates as estimates_service
 from lib_softtrack import history as history_service
 from lib_softtrack import issues as issues_service
 from lib_softtrack import links as links_service
 from lib_softtrack import transfers as transfers_service
+from lib_softtrack.issues import IssueExportRow
 from lib_softtrack.models.estimates import EstimateSummary
 from lib_softtrack.models.history import IssueEventRead
 from lib_softtrack.models.issues import (
@@ -40,6 +46,108 @@ from lib_softtrack.tables import (
 from web import get_session
 
 router = APIRouter(tags=["issues"])
+
+#: The export's columns, in order.
+#:
+#: Stable on purpose: an export is something people build a spreadsheet or a
+#: script on top of, and reordering or renaming a column breaks every one of
+#: those silently. Append, do not rearrange.
+CSV_COLUMNS = [
+    "key",
+    "title",
+    "description",
+    "status",
+    "priority",
+    "assignee",
+    "labels",
+    "project",
+    "cycle",
+    "estimate",
+    "creator",
+    "created",
+    "updated",
+    "parent_key",
+]
+
+
+def _csv_timestamp(value: datetime) -> str:
+    """Render a timestamp for the export as `YYYY-MM-DD HH:MM:SS`.
+
+    `isoformat()` gives the `T` separator and microseconds, which spreadsheets
+    show verbatim instead of parsing as a date.
+    """
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _csv_person(user: Optional[UserPublic]) -> str:
+    """Who someone is in a spreadsheet: their username, or failing that their
+    email. Nobody at all is an empty cell."""
+    if user is None:
+        return ""
+    return user.username or user.email
+
+
+#: What a spreadsheet takes a cell starting with to be a formula.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_text(value: str) -> str:
+    """Text someone typed, made safe to open in a spreadsheet.
+
+    Excel and Sheets run a cell starting with `=` (or `+`, `-`, `@`) as a
+    formula, so an issue titled `=HYPERLINK(...)` would run in the reader's
+    spreadsheet. A leading `'` makes the cell plain text again.
+    """
+    return f"'{value}" if value.startswith(_FORMULA_PREFIXES) else value
+
+
+def _csv_row(row: IssueExportRow) -> list[str]:
+    """One issue as the columns of `CSV_COLUMNS`, in that order."""
+    issue = row.issue
+    return [
+        issue.identifier,
+        _csv_text(issue.title),
+        _csv_text(issue.description or ""),
+        _csv_text(issue.status.name),
+        issue.priority.value,
+        _csv_text(_csv_person(issue.assignee)),
+        _csv_text(";".join(label.name for label in issue.labels)),
+        _csv_text(row.project_name),
+        _csv_text(row.cycle_name),
+        "" if issue.estimate is None else str(issue.estimate),
+        _csv_text(_csv_person(issue.creator)),
+        _csv_timestamp(issue.created_at),
+        _csv_timestamp(issue.updated_at),
+        issue.parent.identifier if issue.parent is not None else "",
+    ]
+
+
+def _csv_chunks(batches: Iterable[list[IssueExportRow]]) -> Iterator[bytes]:
+    """Encode batches of issues as CSV, one chunk of bytes per batch.
+
+    The whole point of taking batches rather than a list is that this never
+    holds more than one of them: the response goes out while the rest of the
+    export is still being read.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
+
+    def drain() -> bytes:
+        chunk = buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        return chunk.encode("utf-8")
+
+    # A UTF-8 BOM, because Excel reads a BOM-less file as the machine's local
+    # codepage and mangles every non-ASCII title in it.
+    yield "\ufeff".encode("utf-8")
+    writer.writerow(CSV_COLUMNS)
+    yield drain()
+
+    for batch in batches:
+        for row in batch:
+            writer.writerow(_csv_row(row))
+        yield drain()
 
 
 @router.post(
@@ -157,6 +265,61 @@ def bulk_delete_issues(
     attachments with it, sub-issues promoted.
     """
     issues_service.bulk_delete_issues(session, current_user, team_id, payload, storage)
+
+
+@router.get(
+    "/teams/{team_id}/issues/export",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "The matching issues as a CSV file.",
+            "content": {"text/csv": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
+def export_issues_csv(
+    team_id: int,
+    project_id: Optional[int] = None,
+    status_id: Optional[int] = Query(None, description="Only issues in this status."),
+    priority: Optional[IssuePriority] = None,
+    assignee_id: Optional[int] = None,
+    unassigned: bool = Query(
+        False, description="Only issues with nobody assigned. Overrides assignee_id."
+    ),
+    label_id: Optional[int] = Query(None, description="Only issues with this label."),
+    parent_id: Optional[int] = Query(
+        None, description="Only sub-issues of this issue."
+    ),
+    cycle_id: Optional[int] = Query(None, description="Only issues in this cycle."),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Stream matching issues as a CSV file.
+
+    The same filters as the issue list, and deliberately no `limit`: an export
+    of the first page would be a worse spreadsheet than the board it came
+    from. The service hands back batches rather than rows so that stays
+    affordable -- nothing here, or under it, holds the whole team's issues.
+    """
+    batches = issues_service.export_issues(
+        session,
+        current_user,
+        team_id,
+        project_id=project_id,
+        status_id=status_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        unassigned=unassigned,
+        label_id=label_id,
+        parent_id=parent_id,
+        cycle_id=cycle_id,
+    )
+
+    return StreamingResponse(
+        _csv_chunks(batches),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=issues.csv"},
+    )
 
 
 @router.get("/teams/{team_id}/estimates", response_model=EstimateSummary)

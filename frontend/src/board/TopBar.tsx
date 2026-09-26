@@ -1,10 +1,13 @@
 import type { ComponentProps } from 'react'
 
+import { AXIOS_INSTANCE } from '@/api/client'
 import { FilterBar } from '@/board/FilterBar'
+import { toQueryParams } from '@/board/filters'
 import type { BoardFilters } from '@/board/filters'
 import type { BoardGrouping } from '@/board/grouping'
 import { type BoardSort, SORT_OPTIONS } from '@/board/sorting'
 import { useTranslation } from '@/i18n'
+import { useState } from 'react'
 import type { BoardView } from '@/keyboard/useCommands'
 import { NotificationsBell } from '@/notifications/NotificationsBell'
 import { useTeamContext } from '@/team/useTeamContext'
@@ -190,6 +193,11 @@ export function TopBar({
           onOpenIssue={onOpenNotifiedIssue}
         />
 
+        <ExportCsvButton
+          filters={filters}
+          searching={search.trim().length > 0}
+        />
+
         {onNewIssue ? (
           <button type="button" onClick={onNewIssue} className="btn btn-primary">
             <Icon name="plus" size={14} strokeWidth={2.2} />
@@ -206,5 +214,85 @@ export function TopBar({
         )}
       </div>
     </header>
+  )
+}
+
+/**
+ * Downloads the board's issues as a CSV, with the filters that are showing.
+ *
+ * Disabled while a search is running, because search and the filters are two
+ * different questions: search replaces the board with `/search` hits, which
+ * the export endpoint knows nothing about. A button that stayed live would
+ * hand back every issue matching the filters -- plausible, unrelated to what
+ * is on screen, and wrong in a way nobody would notice until they had acted
+ * on the spreadsheet. Clearing the search brings it back.
+ */
+function ExportCsvButton({
+  filters,
+  searching,
+}: {
+  filters: BoardFilters
+  searching: boolean
+}) {
+  const { team } = useTeamContext()
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const doExport = async () => {
+    setLoading(true)
+    setFailed(false)
+    try {
+      const params = new URLSearchParams()
+      for (const [key, value] of Object.entries(toQueryParams(filters))) {
+        if (value !== undefined && value !== null) params.set(key, String(value))
+      }
+
+      // The generated client rather than a hand-written URL would be nicer,
+      // but its mutator resolves every response as JSON: a download needs
+      // `responseType: 'blob'`, which only the instance takes.
+      const { data } = await AXIOS_INSTANCE.get<Blob>(
+        `/teams/${team.id}/issues/export?${params.toString()}`,
+        { responseType: 'blob' },
+      )
+
+      const objectUrl = URL.createObjectURL(data)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = 'issues.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      // Released on the next tick rather than right away: Firefox and Safari
+      // start the download after the click returns, and a URL revoked before
+      // then downloads nothing.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const disabled = loading || searching
+  const title = searching
+    ? 'Clear the search to export. An export uses the board filters, not the search results.'
+    : failed
+      ? 'The export failed. Try again.'
+      : 'Download these issues as CSV'
+
+  return (
+    <button
+      type="button"
+      onClick={doExport}
+      className="btn btn-ghost btn-sm"
+      disabled={disabled}
+      aria-disabled={disabled}
+      title={title}
+    >
+      <Icon name="download" size={14} />
+      <span className="hidden sm:inline">
+        {loading ? 'Exporting…' : failed ? 'Export failed' : 'Export CSV'}
+      </span>
+    </button>
   )
 }

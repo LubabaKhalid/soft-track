@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 
 import { TeamContext, type TeamContextValue } from '@/team/useTeamContext'
 
+export type { TeamContextValue } from '@/team/useTeamContext'
+
 export function TeamProvider({
   value,
   children,

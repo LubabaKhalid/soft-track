@@ -48,6 +48,7 @@ export * from './dueFilter';
 export * from './errorCode';
 export * from './estimateSummary';
 export * from './estimateSummaryByStatus';
+export * from './exportIssuesCsvTeamsTeamIdIssuesExportGetParams';
 export * from './flowPoint';
 export * from './forgotPassword';
 export * from './gitProvider';

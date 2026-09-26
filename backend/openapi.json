@@ -2384,6 +2384,187 @@
         }
       }
     },
+    "/teams/{team_id}/issues/export": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Export Issues Csv",
+        "description": "Stream matching issues as a CSV file.\n\nThe same filters as the issue list, and deliberately no `limit`: an export\nof the first page would be a worse spreadsheet than the board it came\nfrom. The service hands back batches rather than rows so that stays\naffordable -- nothing here, or under it, holds the whole team's issues.",
+        "operationId": "export_issues_csv_teams__team_id__issues_export_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "status_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only issues in this status.",
+              "title": "Status Id"
+            },
+            "description": "Only issues in this status."
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/IssuePriority"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Priority"
+            }
+          },
+          {
+            "name": "assignee_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee Id"
+            }
+          },
+          {
+            "name": "unassigned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only issues with nobody assigned. Overrides assignee_id.",
+              "default": false,
+              "title": "Unassigned"
+            },
+            "description": "Only issues with nobody assigned. Overrides assignee_id."
+          },
+          {
+            "name": "label_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only issues with this label.",
+              "title": "Label Id"
+            },
+            "description": "Only issues with this label."
+          },
+          {
+            "name": "parent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only sub-issues of this issue.",
+              "title": "Parent Id"
+            },
+            "description": "Only sub-issues of this issue."
+          },
+          {
+            "name": "cycle_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only issues in this cycle.",
+              "title": "Cycle Id"
+            },
+            "description": "Only issues in this cycle."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The matching issues as a CSV file.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/teams/{team_id}/estimates": {
       "get": {
         "tags": [

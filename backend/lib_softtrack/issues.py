@@ -1,10 +1,14 @@
 """Issue services, including the assembly of the denormalised IssueRead payload."""
 
 from collections import defaultdict
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import NamedTuple, Optional, Union
 
+from fastapi import HTTPException
 from sqlalchemy import case, func, or_
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.sql.elements import ColumnElement
 from sqlmodel import Session, select
 
 from lib_identity.models.identity import UserPublic
@@ -48,6 +52,7 @@ from lib_softtrack.tables import (
     WebhookEvent,
     WorkflowStatus,
 )
+from lib_softtrack.cycles import display_name as cycle_display_name
 from lib_softtrack.ranks import neighbour_or_404, rank_between, rank_order, top_rank
 from lib_softtrack.statuses import (
     RESOLVED,
@@ -336,36 +341,19 @@ def list_issues(
     fifty most recent", which is a different and much less useful thing, and
     silently so.
     """
-    get_team_or_404(team_id, session)
-    require_team_member(team_id, current_user, session)
-
-    filters = [Issue.team_id == team_id]
-    if project_id is not None:
-        filters.append(Issue.project_id == project_id)
-    if status_id is not None:
-        filters.append(Issue.status_id == status_id)
-    if priority is not None:
-        filters.append(Issue.priority == priority)
-    if unassigned:
-        # Distinct from leaving assignee_id null, which means "anybody".
-        filters.append(Issue.assignee_id == None)  # noqa: E711 -- SQL IS NULL
-    elif assignee_id is not None:
-        filters.append(Issue.assignee_id == assignee_id)
-    if label_id is not None:
-        # A subquery rather than a join: an issue joined to its label links
-        # would come back once per matching link, and the count above would
-        # count it that many times.
-        filters.append(
-            Issue.id.in_(
-                select(IssueLabelLink.issue_id).where(
-                    IssueLabelLink.label_id == label_id
-                )
-            )
-        )
-    if parent_id is not None:
-        filters.append(Issue.parent_id == parent_id)
-    if cycle_id is not None:
-        filters.append(Issue.cycle_id == cycle_id)
+    filters = _build_issue_filters(
+        session,
+        current_user,
+        team_id,
+        project_id=project_id,
+        status_id=status_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        unassigned=unassigned,
+        label_id=label_id,
+        parent_id=parent_id,
+        cycle_id=cycle_id,
+    )
     if type is not None:
         filters.append(Issue.type == type)
     if due is not None:
@@ -395,6 +383,202 @@ def list_issues(
         limit=limit,
         offset=offset,
     )
+
+
+def _build_issue_filters(
+    session: Session,
+    current_user: User,
+    team_id: int,
+    project_id: Optional[int] = None,
+    status_id: Optional[int] = None,
+    priority: Optional[IssuePriority] = None,
+    assignee_id: Optional[int] = None,
+    unassigned: bool = False,
+    label_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    cycle_id: Optional[int] = None,
+) -> list[ColumnElement[bool]]:
+    """The WHERE clauses for a team's issue list, after checking who is asking.
+
+    Shared by `list_issues` and `export_issues` so the two cannot drift: an
+    export that quietly matched a different set of issues than the board it
+    was taken from would be worse than no export at all. The membership check
+    lives here for the same reason -- it is the one clause that must never be
+    forgotten by a new caller.
+    """
+    get_team_or_404(team_id, session)
+    require_team_member(team_id, current_user, session)
+
+    filters: list[ColumnElement[bool]] = [Issue.team_id == team_id]
+    if project_id is not None:
+        filters.append(Issue.project_id == project_id)
+    if status_id is not None:
+        filters.append(Issue.status_id == status_id)
+    if priority is not None:
+        filters.append(Issue.priority == priority)
+    if unassigned:
+        # Distinct from leaving assignee_id null, which means "anybody".
+        filters.append(Issue.assignee_id == None)  # noqa: E711 -- SQL IS NULL
+    elif assignee_id is not None:
+        filters.append(Issue.assignee_id == assignee_id)
+    if label_id is not None:
+        # A subquery rather than a join: an issue joined to its label links
+        # would come back once per matching link, so `list_issues` would count
+        # it that many times and the export would repeat the row.
+        filters.append(
+            Issue.id.in_(
+                select(IssueLabelLink.issue_id).where(
+                    IssueLabelLink.label_id == label_id
+                )
+            )
+        )
+    if parent_id is not None:
+        filters.append(Issue.parent_id == parent_id)
+    if cycle_id is not None:
+        filters.append(Issue.cycle_id == cycle_id)
+
+    return filters
+
+
+#: How many issues an export reads, expands and hands over at a time.
+#:
+#: The export is deliberately unpaginated -- a spreadsheet of "the fifty most
+#: recent" is not what anyone asks for -- which is exactly why it cannot load
+#: the result set in one go. Batching bounds both halves of the cost: the rows
+#: held in memory at once, and the `IN (...)` lists `_expand_issues` builds
+#: from them. 500 is large enough that the per-batch queries stay amortised
+#: and small enough that a team with a hundred thousand issues exports in
+#: constant memory.
+EXPORT_BATCH_SIZE = 500
+
+
+class IssueExportRow(NamedTuple):
+    """One issue, with the related names an export has to spell out.
+
+    `IssueRead` carries `project_id` and `cycle_id` but not their names,
+    because every client that renders a board is already holding both lists.
+    A file someone opens in a spreadsheet has no such context, so the names
+    are resolved alongside the issue -- batched, not one lookup per row.
+    """
+
+    issue: IssueRead
+    project_name: str
+    cycle_name: str
+
+
+def export_issues(
+    session: Session,
+    current_user: User,
+    team_id: int,
+    project_id: Optional[int] = None,
+    status_id: Optional[int] = None,
+    priority: Optional[IssuePriority] = None,
+    assignee_id: Optional[int] = None,
+    unassigned: bool = False,
+    label_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    cycle_id: Optional[int] = None,
+) -> Iterator[list[IssueExportRow]]:
+    """Every issue matching the filters, newest number first, in batches.
+
+    Two halves, and the split is the point. The team lookup, the membership
+    check and the filters are resolved *now*, against the caller's session, so
+    an export nobody is allowed to run fails with a status code instead of a
+    200 whose body turns into an error halfway down. Everything after that is
+    lazy, because the caller is a streaming response: see
+    `_export_batches` for why it opens a session of its own.
+    """
+    filters = _build_issue_filters(
+        session,
+        current_user,
+        team_id,
+        project_id=project_id,
+        status_id=status_id,
+        priority=priority,
+        assignee_id=assignee_id,
+        unassigned=unassigned,
+        label_id=label_id,
+        parent_id=parent_id,
+        cycle_id=cycle_id,
+    )
+    return _export_batches(filters, session.get_bind())
+
+
+def _export_batches(
+    filters: list[ColumnElement[bool]], bind: Union[Engine, Connection]
+) -> Iterator[list[IssueExportRow]]:
+    """Walk the matching issues a batch at a time, on a session of our own.
+
+    The request's session is deliberately not used here. Whether FastAPI
+    closes a `yield` dependency before or after a streaming body has moved
+    between versions, and reaching for a closed session would not even raise:
+    SQLAlchemy quietly checks out another connection that nothing in the
+    request scope will ever hand back. Owning the session makes the lifetime
+    explicit either way, and it is bound to the caller's engine rather than
+    the module's so it follows whatever database the request was using --
+    which is also how the tests' `get_session` override reaches this.
+
+    Paged by issue number rather than OFFSET: `(team_id, number)` is unique
+    and every filter set pins the team, so this is both a stable cursor and
+    one the index can seek to, where a deep OFFSET re-scans everything it
+    skips.
+    """
+    with Session(bind) as session:
+        before: Optional[int] = None
+        while True:
+            window = list(filters)
+            if before is not None:
+                window.append(Issue.number < before)
+
+            issues = list(
+                session.exec(
+                    select(Issue)
+                    .where(*window)
+                    .order_by(Issue.number.desc())
+                    .limit(EXPORT_BATCH_SIZE)
+                ).all()
+            )
+            if not issues:
+                return
+
+            yield _export_rows(issues, session)
+
+            if len(issues) < EXPORT_BATCH_SIZE:
+                return
+            before = issues[-1].number
+
+
+def _export_rows(issues: list[Issue], session: Session) -> list[IssueExportRow]:
+    """Expand one batch, resolving project and cycle names in one query each."""
+    project_names = {
+        project.id: project.name
+        for project in session.exec(
+            select(Project).where(
+                Project.id.in_(
+                    {issue.project_id for issue in issues if issue.project_id}
+                )
+            )
+        ).all()
+    }
+    cycle_names = {
+        cycle.id: cycle_display_name(cycle)
+        for cycle in session.exec(
+            select(Cycle).where(
+                Cycle.id.in_({issue.cycle_id for issue in issues if issue.cycle_id})
+            )
+        ).all()
+    }
+
+    return [
+        IssueExportRow(
+            issue=read,
+            # `.get` rather than an `is None` check: an issue with no project
+            # and one pointing at a deleted row both mean "no name to print".
+            project_name=project_names.get(read.project_id, ""),
+            cycle_name=cycle_names.get(read.cycle_id, ""),
+        )
+        for read in _expand_issues(issues, session)
+    ]
 
 
 def get_issue(session: Session, current_user: User, issue_id: int) -> IssueRead:
