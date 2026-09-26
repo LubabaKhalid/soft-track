@@ -1,8 +1,8 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useNavigate } from 'react-router-dom'
 
 import type { IssueRead } from '@/api/generated/models'
+import { usePeekTrigger } from '@/board/peekContext'
 import { selectionGesture } from '@/board/selection'
 import { useTranslation } from '@/i18n'
 import { DueBadge } from '@/issues/DueBadge'
@@ -10,6 +10,8 @@ import { EstimateBadge } from '@/issues/EstimateBadge'
 import { isResolved } from '@/issues/issueMeta'
 import { IssueTypeIcon } from '@/issues/IssueTypeIcon'
 import { PriorityIcon } from '@/issues/PriorityIcon'
+import { useOpenIssue } from '@/issues/surface'
+import { isPlainKey } from '@/keyboard/typing'
 import { useCanWrite } from '@/team/useCanWrite'
 import { useTeamContext } from '@/team/useTeamContext'
 import { Avatar } from '@/ui/Avatar'
@@ -31,8 +33,8 @@ export function IssueCard({
   showProject?: boolean
 }) {
   const { t } = useTranslation('issues')
-  const navigate = useNavigate()
-  const { team, projects } = useTeamContext()
+  const openIssue = useOpenIssue()
+  const { projects } = useTeamContext()
   const project = showProject
     ? projects.find((candidate) => candidate.id === issue.project_id)
     : undefined
@@ -46,6 +48,8 @@ export function IssueCard({
     id: issue.id,
     disabled: !canWrite,
   })
+  // The quick peek (#113): Space, or a mouse resting on the card.
+  const peek = usePeekTrigger(issue.id)
 
   // While dragging, the card follows the pointer with no easing and lifts
   // off the column; the CSS hover transition would otherwise lag the drag.
@@ -63,7 +67,8 @@ export function IssueCard({
       }
     : undefined
 
-  const open = () => navigate(`/${team.key}/issue/${issue.number}`)
+  // The panel, over the board: a card is opened for a glance (#112).
+  const open = () => openIssue(issue, 'panel')
 
   return (
     <div
@@ -74,6 +79,16 @@ export function IssueCard({
       tabIndex={0}
       data-card={issue.id}
       data-selected={selected || undefined}
+      onPointerEnter={peek.onPointerEnter}
+      onPointerLeave={peek.onPointerLeave}
+      onFocus={peek.onFocus}
+      onBlur={peek.onBlur}
+      // A press ends any peek -- it is the start of a click or a drag -- and
+      // is then the drag's, whose handler this replaces.
+      onPointerDown={(e) => {
+        peek.close()
+        listeners?.onPointerDown?.(e)
+      }}
       onClick={(e) => {
         const gesture = selectionGesture(e)
         if (gesture && onSelect) {
@@ -88,14 +103,31 @@ export function IssueCard({
       }}
       onKeyDown={(e) => {
         // Enter opens the issue, as it would on a real button. Everything
-        // else goes to dnd-kit, which picks the card up on Space (#80) --
-        // this handler replaces the one spread in from `listeners`, so it
+        // else goes to dnd-kit, which picks the card up on Shift+Space (#80)
+        // -- this handler replaces the one spread in from `listeners`, so it
         // has to be handed on explicitly or the keyboard sensor never hears
         // a thing. Enter while a card is held is the drop, not an open.
         if (e.key === 'Enter') {
           if (isDragging) return
           e.preventDefault()
           open()
+          return
+        }
+        // Space on its own is the quick peek (#113). Shift+Space is the
+        // sensor's, to pick the card up -- which also ends any peek: a card
+        // being carried is not one being looked at. The sensor matches on
+        // the key code alone, so no other Space reaches it. While a card is
+        // held, Space is the drop, which the sensor hears from the document
+        // without this handler's help.
+        if (e.key === ' ') {
+          if (!isPlainKey(e.nativeEvent)) return
+          if (e.shiftKey) {
+            peek.close()
+            listeners?.onKeyDown?.(e)
+          } else if (!isDragging) {
+            e.preventDefault()
+            peek.toggle(e.currentTarget)
+          }
           return
         }
         listeners?.onKeyDown?.(e)
