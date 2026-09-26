@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { AXIOS_INSTANCE } from '@/api/client'
 import type { CycleRead, LabelRead, ProjectRead, StatusRead, TeamMemberRead } from '@/api/generated/models'
 import { NO_FILTERS, type BoardFilters } from '@/board/filters'
+import { DEFAULT_SORT } from '@/board/sorting'
 import { TopBar } from '@/board/TopBar'
 import { TeamProvider, type TeamContextValue } from '@/team/TeamContext'
 
@@ -56,6 +57,10 @@ const PROJECT: ProjectRead = {
   name: 'Platform',
   color: '#123',
   created_at: '2026-01-01T00:00:00Z',
+  state: 'in_progress',
+  archived: false,
+  issue_count: 0,
+  completed_issue_count: 0,
 }
 
 const LABEL: LabelRead = { id: 4, team_id: 7, name: 'Bug', color: '#456' }
@@ -95,6 +100,8 @@ const ALL_FILTERS: BoardFilters = {
   labelId: LABEL.id,
   projectId: PROJECT.id,
   cycleId: CYCLE.id,
+  due: null,
+  type: null,
 }
 
 function renderTopBar({
@@ -106,6 +113,10 @@ function renderTopBar({
       <TopBar
         view="board"
         onViewChange={vi.fn()}
+        grouping="project"
+        onGroupingChange={vi.fn()}
+        sort={DEFAULT_SORT}
+        onSortChange={vi.fn()}
         onNewIssue={vi.fn()}
         onOpenSidebar={vi.fn()}
         search={search}
@@ -117,6 +128,7 @@ function renderTopBar({
         notificationsOpen={false}
         onToggleNotifications={vi.fn()}
         onCloseNotifications={vi.fn()}
+        onOpenNotifiedIssue={vi.fn()}
       />
     </TeamProvider>,
   )
