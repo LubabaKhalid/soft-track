@@ -13,6 +13,8 @@ class AdminUserRead(UserMe):
     #: How many teams the account belongs to. Enough to tell an active
     #: colleague from a stale invite-era account without opening every team.
     team_count: int
+    #: How many active accounts report to them (#124).
+    report_count: int
 
 
 class AdminUserUpdate(BaseModel):
@@ -23,6 +25,12 @@ class AdminUserUpdate(BaseModel):
     #: leaves it alone. Set here and nowhere else: it is the organisation's
     #: fact, so the person cannot change it from their own profile.
     started_on: Optional[date] = None
+    #: Which department they are in (#123); an explicit null takes them out
+    #: of it. Like the start date, the organisation's to say.
+    department_id: Optional[int] = None
+    #: Who they report to (#124); an explicit null clears it. Refused when it
+    #: would make a loop, or name a deactivated account as a new manager.
+    manager_id: Optional[int] = None
 
 
 class AdminPasswordReset(BaseModel):
