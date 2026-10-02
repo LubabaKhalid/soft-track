@@ -19169,6 +19169,11 @@
             "title": "Wip Counts Subtickets",
             "default": true
           },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived",
+            "default": false
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -19261,6 +19266,17 @@
               }
             ],
             "title": "Wip Counts Subtickets"
+          },
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
           }
         },
         "type": "object",
