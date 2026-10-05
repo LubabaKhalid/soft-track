@@ -56,6 +56,16 @@ class TeamUpdate(BaseModel):
     archived: Optional[bool] = None
 
 
+class EpicRef(BaseModel):
+    """An epic as a roster names it: an outside account's reach (#243)."""
+
+    id: int
+    name: str
+    color: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TeamMemberAdd(BaseModel):
     email: EmailStr
     role: TeamRole = TeamRole.member

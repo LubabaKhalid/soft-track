@@ -142,6 +142,33 @@ def require_team_admin(team_id: int, user: User, session: Session) -> TeamMember
     return membership
 
 
+def require_team_admin_for_delete(
+    team_id: int, user: User, session: Session
+) -> TeamMember:
+    """Require a team admin, preserving guest read-only semantics."""
+    membership = require_team_member(team_id, user, session)
+    if membership.role == TeamRole.guest:
+        team = get_team_or_404(team_id, session)
+        if team.guests_may_comment:
+            raise api_error(
+                status_code=403,
+                code=ErrorCode.team_read_only,
+                detail="Guests can view this team but not change it",
+            )
+        raise api_error(
+            status_code=403,
+            code=ErrorCode.not_team_admin,
+            detail="Only team admins can do that",
+        )
+    if membership.role != TeamRole.admin:
+        raise api_error(
+            status_code=403,
+            code=ErrorCode.not_team_admin,
+            detail="Only team admins can do that",
+        )
+    return membership
+
+
 def require_team_writer(team_id: int, user: User, session: Session) -> TeamMember:
     """The guard for anything that changes what a team contains (#104).
 
@@ -401,7 +428,7 @@ def delete_team(session: Session, current_user: User, team_id: int) -> None:
     """
     team = get_team_or_404(team_id, session)
     if not current_user.is_site_admin:
-        require_team_admin(team_id, current_user, session)
+        require_team_admin_for_delete(team_id, current_user, session)
 
     has_tickets = session.exec(
         select(Ticket.id).where(Ticket.team_id == team_id).limit(1)
