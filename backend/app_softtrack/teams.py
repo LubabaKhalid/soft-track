@@ -21,25 +21,12 @@ from web import get_session
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
-async def _require_team_patch_access(
+def _require_team_patch_access(
     request: Request,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ) -> None:
     team_id = teams_service.team_id_for_path(session, request.path_params)
-    if current_user.is_site_admin:
-        return
-
-    team = teams_service.get_team_or_404(team_id, session)
-    if team.archived:
-        try:
-            payload = await request.json()
-        except Exception:
-            payload = {}
-        if isinstance(payload, dict) and payload.get("archived") is False:
-            return
-
-    teams_service.require_team_writer(team_id, current_user, session)
+    teams_service.get_team_or_404(team_id, session)
 
 
 @router.post("", response_model=TeamRead)
@@ -80,7 +67,7 @@ def get_team(
     return teams_service.get_team(session, current_user, team_id)
 
 
-@router.delete("/{team_id}", status_code=204)
+@router.delete("/{team_id}", status_code=204, dependencies=[team_writer])
 def delete_team(
     team_id: int,
     session: Session = Depends(get_session),

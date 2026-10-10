@@ -145,42 +145,8 @@ def require_team_admin(team_id: int, user: User, session: Session) -> TeamMember
     return membership
 
 
-def require_team_admin_for_delete(
-    team_id: int, user: User, session: Session
-) -> TeamMember:
-    """Require a team admin, preserving guest read-only semantics."""
-    membership = require_team_member(team_id, user, session)
-    if membership.role == TeamRole.guest:
-        team = get_team_or_404(team_id, session)
-        if team.guests_may_comment:
-            raise api_error(
-                status_code=403,
-                code=ErrorCode.team_read_only,
-                detail="Guests can view this team but not change it",
-            )
-        raise api_error(
-            status_code=403,
-            code=ErrorCode.not_team_admin,
-            detail="Only team admins can do that",
-        )
-    if membership.role != TeamRole.admin:
-        raise api_error(
-            status_code=403,
-            code=ErrorCode.not_team_admin,
-            detail="Only team admins can do that",
-        )
-    return membership
-
-
-def require_team_writer(team_id: int, user: User, session: Session) -> TeamMember:
-    """The guard for anything that changes what a team contains (#104).
-
-    Admins and members pass; guests do not. An archived team is also
-    read-only to normal writes, even for admins and members, because the
-    restore flow is intentionally handled by the team PATCH route rather than
-    the generic writer guard.
-    """
-    membership = require_team_member(team_id, user, session)
+def require_team_not_archived(team_id: int, session: Session) -> Team:
+    """Reject mutations on archived teams, regardless of the caller's role."""
     team = get_team_or_404(team_id, session)
     if team.archived:
         raise api_error(
@@ -188,6 +154,22 @@ def require_team_writer(team_id: int, user: User, session: Session) -> TeamMembe
             code=ErrorCode.team_read_only,
             detail="This team is archived, so it can only be restored",
         )
+    return team
+
+
+def require_team_writer(team_id: int, user: User, session: Session) -> TeamMember:
+    """Guard writes to a team's contents (#104).
+
+    Admins and members pass; guests do not. Archived teams are read-only,
+    including for admins and members. The PATCH service handles restoration.
+
+    When an operation also references another team in its request body (for
+    example, linking a ticket to a ticket in another team or moving a ticket),
+    call this helper directly for that second team as well. A path dependency
+    can only guard the team identified by the URL.
+    """
+    membership = require_team_member(team_id, user, session)
+    require_team_not_archived(team_id, session)
     if membership.role == TeamRole.guest:
         raise api_error(
             status_code=403,
@@ -206,6 +188,7 @@ def require_team_commenter(team_id: int, user: User, session: Session) -> TeamMe
     else. The services decide what "their own" covers.
     """
     membership = require_team_member(team_id, user, session)
+    require_team_not_archived(team_id, session)
     if membership.role == TeamRole.guest:
         team = session.get(Team, team_id)
         if not team.guests_may_comment:
@@ -429,9 +412,9 @@ def delete_team(session: Session, current_user: User, team_id: int) -> None:
     The team row is kept alive until the very end so every team-owned child row
     can be removed in one transaction without leaving dangling references.
     """
-    team = get_team_or_404(team_id, session)
+    team = require_team_not_archived(team_id, session)
     if not current_user.is_site_admin:
-        require_team_admin_for_delete(team_id, current_user, session)
+        require_team_admin(team_id, current_user, session)
 
     has_tickets = session.exec(
         select(Ticket.id)
@@ -510,13 +493,12 @@ def update_team(
     session: Session, current_user: User, team_id: int, payload: TeamUpdate
 ) -> Team:
     team = get_team_or_404(team_id, session)
-    other_changes = any(
-        getattr(payload, field) is not None
-        for field in ("name", "description", "any_member_may_delete")
+    other_changes = bool(
+        payload.model_dump(exclude_unset=True).keys() - {"archived"}
     )
 
-    if payload.archived is not None:
-        if payload.archived is False and team.archived and other_changes:
+    if team.archived:
+        if payload.archived is not False or other_changes:
             raise api_error(
                 status_code=403,
                 code=ErrorCode.team_read_only,
@@ -524,14 +506,7 @@ def update_team(
             )
         if not current_user.is_site_admin:
             require_team_admin(team_id, current_user, session)
-    elif team.archived:
-        if other_changes:
-            raise api_error(
-                status_code=403,
-                code=ErrorCode.team_read_only,
-                detail="This team is archived, so it can only be restored",
-            )
-    else:
+    elif not current_user.is_site_admin:
         require_team_admin(team_id, current_user, session)
 
     if payload.name is not None:

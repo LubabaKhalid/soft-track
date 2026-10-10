@@ -133,6 +133,30 @@ def test_an_archived_team_can_be_restored(client, team):
     assert response.json()["archived"] is False
 
 
+def test_a_site_admin_cannot_change_settings_on_an_archived_team(
+    client, auth, admin, team
+):
+    archived = client.patch(
+        f"/teams/{team['team']['id']}",
+        json={"archived": True},
+        headers=team["headers"],
+    )
+    assert archived.status_code == 200, archived.text
+
+    for setting, value in (
+        ("guests_may_comment", False),
+        ("wip_limits_hard", True),
+        ("wip_counts_subtickets", True),
+    ):
+        response = client.patch(
+            f"/teams/{team['team']['id']}",
+            json={setting: value},
+            headers=admin["headers"],
+        )
+        assert response.status_code == 403, f"{setting}: {response.text}"
+        assert response.json()["code"] == "team_read_only"
+
+
 def test_an_archived_team_rejects_metadata_changes(client, team):
     client.patch(
         f"/teams/{team['team']['id']}",
@@ -465,7 +489,7 @@ def test_a_team_admin_can_delete_an_empty_team(client, team):
     )
 
 
-def test_a_site_admin_can_delete_another_teams_empty_team(client, auth, admin):
+def test_a_site_admin_cannot_delete_another_teams_empty_team(client, auth, admin):
     owner = auth(email="owner@softtrack.dev", full_name="Owner User")
     team_response = client.post(
         "/teams",
@@ -475,7 +499,9 @@ def test_a_site_admin_can_delete_another_teams_empty_team(client, auth, admin):
     team_id = team_response.json()["id"]
 
     response = client.delete(f"/teams/{team_id}", headers=admin["headers"])
-    assert response.status_code == 204
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_team_member"
+    assert client.get(f"/teams/{team_id}", headers=owner["headers"]).status_code == 200
 
 
 def test_a_member_cannot_delete_a_team(client, auth):
@@ -515,7 +541,7 @@ def test_a_guest_cannot_delete_a_team(client, auth):
 
     response = client.delete(f"/teams/{team_id}", headers=guest["headers"])
     assert response.status_code == 403
-    assert response.json()["code"] == "not_team_admin"
+    assert response.json()["code"] == "team_read_only"
 
 
 def test_a_team_with_tickets_cannot_be_deleted(client, team):
@@ -557,7 +583,7 @@ def test_a_team_with_a_trashed_ticket_cannot_be_deleted(client, team):
     assert team_response.status_code == 200
 
 
-def test_an_archived_empty_team_can_be_deleted(client, team):
+def test_an_archived_empty_team_cannot_be_deleted(client, team):
     client.patch(
         f"/teams/{team['team']['id']}",
         json={"archived": True},
@@ -565,13 +591,12 @@ def test_an_archived_empty_team_can_be_deleted(client, team):
     )
 
     response = client.delete(f"/teams/{team['team']['id']}", headers=team["headers"])
-    assert response.status_code == 204
+    assert response.status_code == 403
+    assert response.json()["code"] == "team_read_only"
     assert (
         client.get(f"/teams/{team['team']['id']}", headers=team["headers"]).status_code
-        == 404
+        == 200
     )
-
-
 def test_a_team_with_a_default_saved_view_can_be_deleted(client, team, session):
     view_response = client.post(
         f"/teams/{team['team']['id']}/views",
