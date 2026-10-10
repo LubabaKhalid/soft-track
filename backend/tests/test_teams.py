@@ -560,14 +560,16 @@ def test_deleting_a_team_removes_its_configuration_and_dependencies(
         body="Cleanup test template body",
     )
 
-    session.add_all([
-        guest_epic,
-        rule,
-        repository,
-        invite,
-        share_link,
-        template,
-    ])
+    session.add_all(
+        [
+            guest_epic,
+            rule,
+            repository,
+            invite,
+            share_link,
+            template,
+        ]
+    )
     session.commit()
 
     response = client.delete(
@@ -577,36 +579,42 @@ def test_deleting_a_team_removes_its_configuration_and_dependencies(
     assert response.status_code == 204, response.text
 
     assert session.get(Team, team_id) is None
-    assert session.exec(
-        select(Project).where(Project.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(GuestEpic).where(GuestEpic.project_id == project_id)
-    ).all() == []
-    assert session.exec(
-        select(Label).where(Label.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(WorkflowStatus).where(WorkflowStatus.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(Sprint).where(Sprint.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(AutomationRule).where(AutomationRule.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(Repository).where(Repository.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(TeamInvite).where(TeamInvite.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(ShareLink).where(ShareLink.team_id == team_id)
-    ).all() == []
-    assert session.exec(
-        select(TicketTemplate).where(TicketTemplate.team_id == team_id)
-    ).all() == []
+    assert session.exec(select(Project).where(Project.team_id == team_id)).all() == []
+    assert (
+        session.exec(select(GuestEpic).where(GuestEpic.project_id == project_id)).all()
+        == []
+    )
+    assert session.exec(select(Label).where(Label.team_id == team_id)).all() == []
+    assert (
+        session.exec(
+            select(WorkflowStatus).where(WorkflowStatus.team_id == team_id)
+        ).all()
+        == []
+    )
+    assert session.exec(select(Sprint).where(Sprint.team_id == team_id)).all() == []
+    assert (
+        session.exec(
+            select(AutomationRule).where(AutomationRule.team_id == team_id)
+        ).all()
+        == []
+    )
+    assert (
+        session.exec(select(Repository).where(Repository.team_id == team_id)).all()
+        == []
+    )
+    assert (
+        session.exec(select(TeamInvite).where(TeamInvite.team_id == team_id)).all()
+        == []
+    )
+    assert (
+        session.exec(select(ShareLink).where(ShareLink.team_id == team_id)).all() == []
+    )
+    assert (
+        session.exec(
+            select(TicketTemplate).where(TicketTemplate.team_id == team_id)
+        ).all()
+        == []
+    )
 
 
 def test_a_team_admin_can_delete_an_empty_team(client, team):
@@ -726,6 +734,8 @@ def test_an_archived_empty_team_cannot_be_deleted(client, team):
         client.get(f"/teams/{team['team']['id']}", headers=team["headers"]).status_code
         == 200
     )
+
+
 def test_a_team_with_a_default_saved_view_can_be_deleted(client, team, session):
     view_response = client.post(
         f"/teams/{team['team']['id']}/views",

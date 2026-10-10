@@ -288,9 +288,7 @@ def test_a_guest_is_refused_by_every_mutating_route(client, world, guest, method
     request_kwargs = {}
     if (method, path) == ("PATCH", "/teams/{team_id}"):
         request_kwargs["json"] = {"name": "Guest edit attempt"}
-    response = client.request(
-        method, url, headers=guest["headers"], **request_kwargs
-    )
+    response = client.request(method, url, headers=guest["headers"], **request_kwargs)
 
     assert response.status_code == 403, (method, path, response.text)
 
@@ -322,9 +320,7 @@ def test_letting_guests_comment_opens_the_conversation_and_nothing_else(
     request_kwargs = {}
     if (method, path) == ("PATCH", "/teams/{team_id}"):
         request_kwargs["json"] = {"name": "Guest edit attempt"}
-    response = client.request(
-        method, url, headers=guest["headers"], **request_kwargs
-    )
+    response = client.request(method, url, headers=guest["headers"], **request_kwargs)
 
     if (method, path) in GUEST_COMMENT_ROUTES:
         # Past the guard: whatever it answers -- the file in `world` is not

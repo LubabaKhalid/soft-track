@@ -493,9 +493,7 @@ def update_team(
     session: Session, current_user: User, team_id: int, payload: TeamUpdate
 ) -> Team:
     team = get_team_or_404(team_id, session)
-    other_changes = bool(
-        payload.model_dump(exclude_unset=True).keys() - {"archived"}
-    )
+    other_changes = bool(payload.model_dump(exclude_unset=True).keys() - {"archived"})
 
     if team.archived:
         if payload.archived is not False or other_changes:
