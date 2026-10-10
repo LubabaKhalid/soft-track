@@ -1,14 +1,30 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from sqlmodel import select
 
 from lib_softtrack.tables import (
+    AutomationRule,
+    AutomationTrigger,
     CustomField,
     CustomFieldValue,
+    GitProvider,
+    GuestEpic,
+    Label,
     OutboundWebhook,
+    Project,
+    Repository,
     SavedView,
+    ShareLink,
+    Sprint,
+    SprintState,
+    StatusCategory,
     Team,
+    TeamInvite,
+    TicketTemplate,
     UserDefaultView,
     WebhookDelivery,
+    WorkflowStatus,
 )
 
 
@@ -478,6 +494,119 @@ def test_team_read_includes_archived_for_active_and_archived_states(
     assert archived.status_code == 200
     assert "archived" in archived.json()
     assert archived.json()["archived"] is True
+
+
+def test_deleting_a_team_removes_its_configuration_and_dependencies(
+    client, team, session
+):
+    team_id = team["team"]["id"]
+    user_id = team["user"]["id"]
+
+    project = Project(team_id=team_id, name="Cleanup project")
+    label = Label(team_id=team_id, name="Cleanup label")
+    status = WorkflowStatus(
+        team_id=team_id,
+        name="Cleanup status",
+        category=StatusCategory.started,
+        position=10,
+    )
+    now = datetime.now(timezone.utc)
+    sprint = Sprint(
+        team_id=team_id,
+        number=1,
+        starts_at=now,
+        ends_at=now + timedelta(days=14),
+        state=SprintState.upcoming,
+    )
+    session.add_all([project, label, status, sprint])
+    session.flush()
+    project_id = project.id
+
+    guest_epic = GuestEpic(user_id=user_id, project_id=project_id)
+    rule = AutomationRule(
+        team_id=team_id,
+        name="Cleanup rule",
+        trigger=AutomationTrigger.ticket_created,
+        if_status_id=status.id,
+        if_label_id=label.id,
+        if_project_id=project.id,
+        set_sprint_id=sprint.id,
+        created_by_id=user_id,
+    )
+    repository = Repository(
+        team_id=team_id,
+        provider=GitProvider.github,
+        full_name="example/cleanup",
+        hook_token="cleanup-hook-token",
+        secret="cleanup-secret",
+        created_by_id=user_id,
+    )
+    invite = TeamInvite(
+        team_id=team_id,
+        email="cleanup-invite@softtrack.dev",
+        token="cleanup-invite-token",
+        invited_by_id=user_id,
+        expires_at=now + timedelta(days=1),
+    )
+    share_link = ShareLink(
+        team_id=team_id,
+        project_id=project_id,
+        token_hash="cleanup-share-token-hash",
+        created_by_id=user_id,
+    )
+    template = TicketTemplate(
+        team_id=team_id,
+        name="Cleanup template",
+        body="Cleanup test template body",
+    )
+
+    session.add_all([
+        guest_epic,
+        rule,
+        repository,
+        invite,
+        share_link,
+        template,
+    ])
+    session.commit()
+
+    response = client.delete(
+        f"/teams/{team_id}",
+        headers=team["headers"],
+    )
+    assert response.status_code == 204, response.text
+
+    assert session.get(Team, team_id) is None
+    assert session.exec(
+        select(Project).where(Project.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(GuestEpic).where(GuestEpic.project_id == project_id)
+    ).all() == []
+    assert session.exec(
+        select(Label).where(Label.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(WorkflowStatus).where(WorkflowStatus.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(Sprint).where(Sprint.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(AutomationRule).where(AutomationRule.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(Repository).where(Repository.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(TeamInvite).where(TeamInvite.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(ShareLink).where(ShareLink.team_id == team_id)
+    ).all() == []
+    assert session.exec(
+        select(TicketTemplate).where(TicketTemplate.team_id == team_id)
+    ).all() == []
 
 
 def test_a_team_admin_can_delete_an_empty_team(client, team):
