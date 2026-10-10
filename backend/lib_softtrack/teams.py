@@ -23,9 +23,12 @@ from lib_softtrack.tables import (
     CustomField,
     CustomFieldValue,
     CodeLink,
+    GuestEpic,
     Label,
     Sprint,
+    SprintAction,
     Ticket,
+    TicketEvent,
     TicketTemplate,
     OutboundWebhook,
     UserDefaultView,
@@ -431,7 +434,10 @@ def delete_team(session: Session, current_user: User, team_id: int) -> None:
         require_team_admin_for_delete(team_id, current_user, session)
 
     has_tickets = session.exec(
-        select(Ticket.id).where(Ticket.team_id == team_id).limit(1)
+        select(Ticket.id)
+        .where(Ticket.team_id == team_id)
+        .limit(1)
+        .execution_options(**INCLUDE_TRASHED)
     ).first()
     if has_tickets is not None:
         raise api_error(
@@ -457,6 +463,20 @@ def delete_team(session: Session, current_user: User, team_id: int) -> None:
     if team.default_view_id is not None:
         team.default_view_id = None
         session.add(team)
+
+    # Remove rows that retain references to the team or its children.
+    session.exec(delete(ShareLink).where(ShareLink.team_id == team_id))
+    session.exec(delete(TicketEvent).where(TicketEvent.team_id == team_id))
+
+    sprint_ids = session.exec(select(Sprint.id).where(Sprint.team_id == team_id)).all()
+    if sprint_ids:
+        session.exec(delete(SprintAction).where(SprintAction.sprint_id.in_(sprint_ids)))
+
+    project_ids = session.exec(
+        select(Project.id).where(Project.team_id == team_id)
+    ).all()
+    if project_ids:
+        session.exec(delete(GuestEpic).where(GuestEpic.project_id.in_(project_ids)))
 
     session.exec(delete(TeamMember).where(TeamMember.team_id == team_id))
     session.exec(delete(TeamInvite).where(TeamInvite.team_id == team_id))

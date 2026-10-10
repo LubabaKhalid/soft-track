@@ -536,6 +536,27 @@ def test_a_team_with_tickets_cannot_be_deleted(client, team):
     )
 
 
+def test_a_team_with_a_trashed_ticket_cannot_be_deleted(client, team):
+    ticket_response = client.post(
+        f"/teams/{team['team']['id']}/tickets",
+        json={"title": "Ticket in trash"},
+        headers=team["headers"],
+    )
+    assert ticket_response.status_code == 200
+    ticket_id = ticket_response.json()["id"]
+
+    trash_response = client.delete(f"/tickets/{ticket_id}", headers=team["headers"])
+    assert trash_response.status_code == 204
+
+    response = client.delete(f"/teams/{team['team']['id']}", headers=team["headers"])
+    assert response.status_code == 409
+    assert response.json()["code"] == "team_has_tickets"
+    assert "archive" in response.json()["detail"]
+
+    team_response = client.get(f"/teams/{team['team']['id']}", headers=team["headers"])
+    assert team_response.status_code == 200
+
+
 def test_an_archived_empty_team_can_be_deleted(client, team):
     client.patch(
         f"/teams/{team['team']['id']}",

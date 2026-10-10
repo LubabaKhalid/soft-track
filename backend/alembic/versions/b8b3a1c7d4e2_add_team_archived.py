@@ -1,7 +1,7 @@
 """add team archived flag
 
 Revision ID: b8b3a1c7d4e2
-Revises: 45e4506be3db
+Revises: c5ed33d77db4
 Create Date: 2026-10-02
 
 Every existing team is new and active by default, so the archive flag is backfilled to
