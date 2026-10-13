@@ -2,7 +2,8 @@
 
 from typing import Mapping, Optional
 
-from sqlmodel import Session, case, delete, func, select
+from sqlalchemy import delete, update
+from sqlmodel import Session, case, col, func, select
 
 from lib_identity.models.identity import UserPublic
 from lib_softtrack import outside
@@ -27,10 +28,14 @@ from lib_softtrack.tables import (
     CodeLink,
     GuestEpic,
     Label,
+    Notification,
+    ScheduleRun,
     Sprint,
+    SprintCapacity,
     SprintAction,
     Ticket,
     TicketEvent,
+    TicketLabelLink,
     TicketSchedule,
     TicketTemplate,
     OutboundWebhook,
@@ -45,9 +50,11 @@ from lib_softtrack.tables import (
     TeamInvite,
     TeamJoinRequest,
     TeamMember,
+    TeamRequest,
     TeamRole,
     User,
     WorkflowStatus,
+    utcnow,
 )
 from lib_softtrack.trash import INCLUDE_TRASHED
 from lib_utils.errors import ErrorCode, api_error
@@ -152,7 +159,7 @@ def require_team_admin(team_id: int, user: User, session: Session) -> TeamMember
 def require_team_not_archived(team_id: int, session: Session) -> Team:
     """Reject mutations on archived teams, regardless of the caller's role."""
     team = get_team_or_404(team_id, session)
-    if team.archived:
+    if team.archived_at is not None:
         raise api_error(
             status_code=403,
             code=ErrorCode.team_read_only,
@@ -361,7 +368,10 @@ def list_teams_for_user(session: Session, current_user: User) -> list[Team]:
     statement = (
         select(Team)
         .join(TeamMember, TeamMember.team_id == Team.id)
-        .where(TeamMember.user_id == current_user.id, Team.archived == False)
+        .where(
+            TeamMember.user_id == current_user.id,
+            Team.archived_at == None,  # noqa: E711 -- SQL comparison
+        )
     )
     return session.exec(statement).all()
 
@@ -398,7 +408,6 @@ def team_directory(session: Session, user: User) -> TeamDirectory:
     teams = session.exec(
         select(Team)
         .where(Team.archived_at == None)  # noqa: E711 -- SQL comparison
-        .where(Team.archived == False)  # noqa: E712 -- SQL comparison
         .order_by(func.lower(Team.name))
     ).all()
     shown = [t for t in teams if t.listed or t.id in mine or t.id in asked]
@@ -451,87 +460,104 @@ def get_team(session: Session, current_user: User, team_id: int) -> Team:
     return team
 
 
-def delete_team(session: Session, current_user: User, team_id: int) -> None:
-    """Delete an empty team, removing its own config and memberships.
+def delete_empty_team(session: Session, team: Team) -> None:
+    """Delete a team with no tickets, the trash included: the one made to try
+    the product, or by mistake. A team with work in it is archived instead.
 
-    The team row is kept alive until the very end so every team-owned child row
-    can be removed in one transaction without leaving dangling references.
+    The one deletion routine behind both doors: a team admin's
+    `DELETE /teams/{id}` (#322) and a site admin's `DELETE /admin/teams/{id}`
+    (#307). Each route keeps its own guard; the rule for "empty" and what goes
+    with the team live here.
+
+    Everything that belongs to it goes with it, children first so that no
+    foreign key is left pointing at a removed row: its webhooks and their
+    deliveries, rules and their runs, schedules and their runs, repositories
+    and their code links, views, default views and share links, epics and
+    their outside guests, sprints with their actions and capacities, history
+    rows still filed under it (a ticket moved away keeps its old ones), fields
+    with their values and the notifications that name them, labels and their
+    links to tickets, statuses, templates, invitations, join requests and memberships
+    (notification mutes live on the membership). A request for a team that
+    approving created keeps its row, as the record of who asked; it just no
+    longer names a team.
+    """
+    team_id = team.id
+    tickets = session.exec(
+        select(func.count())
+        .select_from(Ticket)
+        .where(Ticket.team_id == team_id)
+        .execution_options(**INCLUDE_TRASHED)
+    ).one()
+    if tickets:
+        raise api_error(
+            status_code=409,
+            code=ErrorCode.team_not_empty,
+            detail=f"{team.name} has tickets, so it can be archived and not deleted",
+        )
+
+    def of_team(table):
+        return select(table.id).where(table.team_id == team_id).scalar_subquery()
+
+    team.default_view_id = None
+    session.add(team)
+    session.flush()
+    for statement in (
+        delete(WebhookDelivery).where(
+            col(WebhookDelivery.webhook_id).in_(of_team(OutboundWebhook))
+        ),
+        delete(OutboundWebhook).where(OutboundWebhook.team_id == team_id),
+        delete(AutomationRun).where(AutomationRun.team_id == team_id),
+        delete(AutomationRule).where(AutomationRule.team_id == team_id),
+        delete(ScheduleRun).where(
+            col(ScheduleRun.schedule_id).in_(of_team(TicketSchedule))
+        ),
+        delete(TicketSchedule).where(TicketSchedule.team_id == team_id),
+        delete(CodeLink).where(col(CodeLink.repository_id).in_(of_team(Repository))),
+        delete(Repository).where(Repository.team_id == team_id),
+        delete(ShareLink).where(ShareLink.team_id == team_id),
+        delete(UserDefaultView).where(UserDefaultView.team_id == team_id),
+        delete(SavedView).where(SavedView.team_id == team_id),
+        delete(GuestEpic).where(col(GuestEpic.project_id).in_(of_team(Project))),
+        delete(SprintAction).where(col(SprintAction.sprint_id).in_(of_team(Sprint))),
+        delete(SprintCapacity).where(
+            col(SprintCapacity.sprint_id).in_(of_team(Sprint))
+        ),
+        delete(TicketEvent).where(TicketEvent.team_id == team_id),
+        delete(Notification).where(
+            col(Notification.custom_field_id).in_(of_team(CustomField))
+        ),
+        delete(CustomFieldValue).where(
+            col(CustomFieldValue.field_id).in_(of_team(CustomField))
+        ),
+        delete(CustomField).where(CustomField.team_id == team_id),
+        delete(Sprint).where(Sprint.team_id == team_id),
+        delete(Project).where(Project.team_id == team_id),
+        delete(TicketLabelLink).where(
+            col(TicketLabelLink.label_id).in_(of_team(Label))
+        ),
+        delete(Label).where(Label.team_id == team_id),
+        delete(WorkflowStatus).where(WorkflowStatus.team_id == team_id),
+        delete(TicketTemplate).where(TicketTemplate.team_id == team_id),
+        delete(TeamInvite).where(TeamInvite.team_id == team_id),
+        delete(TeamJoinRequest).where(TeamJoinRequest.team_id == team_id),
+        delete(TeamMember).where(TeamMember.team_id == team_id),
+        update(TeamRequest).where(TeamRequest.team_id == team_id).values(team_id=None),
+    ):
+        session.exec(statement)
+    session.delete(team)
+    session.commit()
+
+
+def delete_team(session: Session, current_user: User, team_id: int) -> None:
+    """A team admin deletes their own team, if it is empty (#322).
+
+    An archived team is read-only, so it is unarchived first; a site admin
+    deletes any empty team from Administration -> Teams instead.
     """
     team = require_team_not_archived(team_id, session)
     if not current_user.is_site_admin:
         require_team_admin(team_id, current_user, session)
-
-    has_tickets = session.exec(
-        select(Ticket.id)
-        .where(Ticket.team_id == team_id)
-        .limit(1)
-        .execution_options(**INCLUDE_TRASHED)
-    ).first()
-    if has_tickets is not None:
-        raise api_error(
-            status_code=409,
-            code=ErrorCode.team_has_tickets,
-            detail="This team still has tickets and cannot be deleted; archive it instead",
-        )
-
-    repository_ids = session.exec(
-        select(Repository.id).where(Repository.team_id == team_id)
-    ).all()
-    if repository_ids:
-        session.exec(delete(CodeLink).where(CodeLink.repository_id.in_(repository_ids)))
-
-    webhook_ids = session.exec(
-        select(OutboundWebhook.id).where(OutboundWebhook.team_id == team_id)
-    ).all()
-    if webhook_ids:
-        session.exec(
-            delete(WebhookDelivery).where(WebhookDelivery.webhook_id.in_(webhook_ids))
-        )
-
-    if team.default_view_id is not None:
-        team.default_view_id = None
-        session.add(team)
-
-    # Remove rows that retain references to the team or its children.
-    session.exec(delete(ShareLink).where(ShareLink.team_id == team_id))
-    session.exec(delete(TicketEvent).where(TicketEvent.team_id == team_id))
-
-    sprint_ids = session.exec(select(Sprint.id).where(Sprint.team_id == team_id)).all()
-    if sprint_ids:
-        session.exec(delete(SprintAction).where(SprintAction.sprint_id.in_(sprint_ids)))
-
-    project_ids = session.exec(
-        select(Project.id).where(Project.team_id == team_id)
-    ).all()
-    if project_ids:
-        session.exec(delete(GuestEpic).where(GuestEpic.project_id.in_(project_ids)))
-
-    session.exec(delete(TeamMember).where(TeamMember.team_id == team_id))
-    session.exec(delete(TeamInvite).where(TeamInvite.team_id == team_id))
-    session.exec(delete(UserDefaultView).where(UserDefaultView.team_id == team_id))
-    session.exec(delete(AutomationRun).where(AutomationRun.team_id == team_id))
-    session.exec(delete(AutomationRule).where(AutomationRule.team_id == team_id))
-    session.exec(delete(SavedView).where(SavedView.team_id == team_id))
-    session.exec(delete(Repository).where(Repository.team_id == team_id))
-    session.exec(delete(OutboundWebhook).where(OutboundWebhook.team_id == team_id))
-    session.exec(delete(TicketTemplate).where(TicketTemplate.team_id == team_id))
-
-    field_ids = session.exec(
-        select(CustomField.id).where(CustomField.team_id == team_id)
-    ).all()
-    if field_ids:
-        session.exec(
-            delete(CustomFieldValue).where(CustomFieldValue.field_id.in_(field_ids))
-        )
-    session.exec(delete(CustomField).where(CustomField.team_id == team_id))
-    session.exec(delete(Label).where(Label.team_id == team_id))
-    session.exec(delete(WorkflowStatus).where(WorkflowStatus.team_id == team_id))
-    session.exec(delete(Project).where(Project.team_id == team_id))
-    session.exec(delete(Sprint).where(Sprint.team_id == team_id))
-
-    session.flush()
-    session.delete(team)
-    session.commit()
+    delete_empty_team(session, team)
 
 
 def update_team(
@@ -540,7 +566,7 @@ def update_team(
     team = get_team_or_404(team_id, session)
     other_changes = bool(payload.model_dump(exclude_unset=True).keys() - {"archived"})
 
-    if team.archived:
+    if team.archived_at is not None:
         if payload.archived is not False or other_changes:
             raise api_error(
                 status_code=403,
@@ -581,8 +607,12 @@ def update_team(
         team.listed = payload.listed
     if payload.open_to_join is not None:
         team.open_to_join = payload.open_to_join
-    if payload.archived is not None:
-        team.archived = payload.archived
+    # One flag for both doors (#307, #322): the date it was archived. Asking
+    # for what it is already keeps that date.
+    if payload.archived is not None and payload.archived != (
+        team.archived_at is not None
+    ):
+        team.archived_at = utcnow() if payload.archived else None
 
     session.add(team)
     session.commit()
@@ -795,7 +825,7 @@ def remove_team_member(
     team = get_team_or_404(team_id, session)
 
     leaving = member_user_id == current_user.id
-    if team.archived and not leaving:
+    if team.archived_at is not None and not leaving:
         raise api_error(
             status_code=403,
             code=ErrorCode.team_read_only,

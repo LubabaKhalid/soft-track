@@ -498,3 +498,377 @@ def test_only_a_site_admin_deletes_a_team(client, instance):
         f"/admin/teams/{instance['hck']['id']}", headers=instance["lena"]["headers"]
     )
     assert response.status_code == 403
+
+
+# --- one flag and one delete, whichever door (#307, #322) ------------------------
+
+
+def test_a_site_admin_archive_makes_the_team_read_only(client, instance):
+    lena, team_id = instance["lena"], instance["hck"]["id"]
+    work = ticket(client, lena, team_id)
+    archive(client, instance, team_id)
+
+    read = client.get(f"/teams/{team_id}", headers=lena["headers"]).json()
+    assert read["archived"] is True
+    assert read["archived_at"]
+    refused = client.post(
+        f"/teams/{team_id}/tickets", json={"title": "More"}, headers=lena["headers"]
+    )
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "team_read_only"
+    comment = client.post(
+        f"/tickets/{work['id']}/comments", json={"body": "hi"}, headers=lena["headers"]
+    )
+    assert comment.status_code == 403
+    assert comment.json()["code"] == "team_read_only"
+    # Its own admin can only put it back, through the team's settings.
+    rename = client.patch(
+        f"/teams/{team_id}", json={"name": "Renamed"}, headers=lena["headers"]
+    )
+    assert rename.status_code == 403
+
+    archive(client, instance, team_id, undo=True)
+    assert (
+        client.post(
+            f"/teams/{team_id}/tickets", json={"title": "More"}, headers=lena["headers"]
+        ).status_code
+        == 200
+    )
+
+
+def test_a_team_admin_archive_is_what_the_admin_page_sees(client, instance):
+    lena, team_id = instance["lena"], instance["hck"]["id"]
+    response = client.patch(
+        f"/teams/{team_id}", json={"archived": True}, headers=lena["headers"]
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["archived"] is True
+    archived_at = response.json()["archived_at"]
+    assert archived_at
+
+    row = by_key(teams(client, instance["admin"]))["HCK"]
+    assert row["archived_at"] == archived_at
+    assert [
+        r["key"] for r in teams(client, instance["admin"], filter="archived")["items"]
+    ] == ["HCK"]
+    # The site admin archiving it again keeps the day it was archived.
+    assert archive(client, instance, team_id)["archived_at"] == archived_at
+
+    # And a site admin's unarchive is what the team sees.
+    archive(client, instance, team_id, undo=True)
+    read = client.get(f"/teams/{team_id}", headers=lena["headers"]).json()
+    assert read["archived"] is False
+    assert read["archived_at"] is None
+    restored = client.patch(
+        f"/teams/{team_id}", json={"archived": False}, headers=lena["headers"]
+    )
+    assert restored.status_code == 200, restored.text
+
+
+#: Every table with a foreign key to `team`. A table added with one fails
+#: `test_deleting_a_team_leaves_nothing_pointing_at_it` until the shared delete
+#: (`lib_softtrack.teams.delete_empty_team`) and that test cover it.
+TEAM_TABLES = {
+    "automationrule",
+    "automationrun",
+    "customfield",
+    "label",
+    "outboundwebhook",
+    "project",
+    "repository",
+    "savedview",
+    "sharelink",
+    "sprint",
+    "teaminvite",
+    "teamjoinrequest",
+    "teammember",
+    "teamrequest",
+    "ticket",
+    "ticketevent",
+    "ticketschedule",
+    "tickettemplate",
+    "userdefaultview",
+    "workflowstatus",
+}
+#: And every table with one to those, but for tickets, which an empty team
+#: has none of.
+CHILD_TABLES = {
+    "codelink",
+    "customfieldvalue",
+    "guestepic",
+    "notification",
+    "schedulerun",
+    "sprintaction",
+    "sprintcapacity",
+    "ticketlabellink",
+    "webhookdelivery",
+}
+
+
+def test_every_table_that_names_a_team_is_known():
+    from sqlmodel import SQLModel
+
+    tables = SQLModel.metadata.tables.values()
+
+    def pointing_at(names):
+        return {
+            table.name
+            for table in tables
+            if table.name != "team"
+            and any(fk.column.table.name in names for fk in table.foreign_keys)
+        }
+
+    assert pointing_at({"team"}) == TEAM_TABLES
+    owned = TEAM_TABLES - {"ticket", "teamrequest"}
+    assert pointing_at(owned) - TEAM_TABLES == CHILD_TABLES
+
+
+@pytest.mark.parametrize("door", ["team admin", "site admin"])
+def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session, door):
+    """One row of every kind a team owns, and of what hangs off those; either
+    door removes them all and leaves no foreign key dangling."""
+    from datetime import date
+
+    from sqlalchemy import text
+
+    from lib_softtrack.tables import (
+        AutomationRule,
+        AutomationRun,
+        AutomationTrigger,
+        CodeLink,
+        CodeLinkKind,
+        CustomField,
+        CustomFieldKind,
+        CustomFieldValue,
+        GitProvider,
+        GuestEpic,
+        Notification,
+        NotificationKind,
+        OutboundWebhook,
+        Repository,
+        ScheduleRun,
+        ShareLink,
+        SprintAction,
+        SprintCapacity,
+        StatusCategory,
+        TeamInvite,
+        TeamJoinRequest,
+        TicketEvent,
+        TicketEventField,
+        TicketLabelLink,
+        TicketTemplate,
+        UserDefaultView,
+        WebhookDelivery,
+        WorkflowStatus,
+    )
+
+    lena, tomas = instance["lena"], instance["tomas"]
+    team_id = instance["hck"]["id"]
+    lena_id, tomas_id = lena["user"]["id"], tomas["user"]["id"]
+    # Work on another team that the deleted team's rows may still name.
+    elsewhere = ticket(client, instance["amina"], instance["eng"]["id"])["id"]
+    now = utcnow()
+
+    def add(row):
+        session.add(row)
+        session.flush()
+        return row
+
+    project = add(Project(team_id=team_id, name="Demo day"))
+    sprint = add(
+        Sprint(
+            team_id=team_id,
+            number=1,
+            starts_at=now,
+            ends_at=now + timedelta(days=14),
+        )
+    )
+    label = add(Label(team_id=team_id, name="ci"))
+    status = add(
+        WorkflowStatus(
+            team_id=team_id,
+            name="Review",
+            category=StatusCategory.started,
+            position=9,
+        )
+    )
+    view = add(
+        SavedView(
+            team_id=team_id,
+            name="Demo",
+            owner_id=lena_id,
+            project_id=project.id,
+            sprint_id=sprint.id,
+        )
+    )
+    team = session.get(Team, team_id)
+    team.default_view_id = view.id
+    session.add(team)
+    field = add(
+        CustomField(
+            team_id=team_id, key="reviewer", name="Reviewer", kind=CustomFieldKind.text
+        )
+    )
+    rule = add(
+        AutomationRule(
+            team_id=team_id,
+            name="Urgent",
+            trigger=AutomationTrigger.ticket_created,
+            if_status_id=status.id,
+            if_label_id=label.id,
+            if_project_id=project.id,
+            set_sprint_id=sprint.id,
+            created_by_id=lena_id,
+        )
+    )
+    schedule = add(
+        TicketSchedule(
+            team_id=team_id,
+            title="Demo prep",
+            frequency="weekly",
+            weekdays=[0],
+            starts_on=date(2026, 9, 7),
+            active_since=date(2026, 9, 7),
+            created_by_id=lena_id,
+        )
+    )
+    repository = add(
+        Repository(
+            team_id=team_id,
+            provider=GitProvider.github,
+            full_name="acme/hackday",
+            hook_token="hook-token",
+            secret="secret",
+            created_by_id=lena_id,
+        )
+    )
+    webhook = add(
+        OutboundWebhook(
+            team_id=team_id,
+            url="https://93.184.216.34/softtrack",
+            secret="secret",
+            events="ticket.created",
+            created_by_id=lena_id,
+        )
+    )
+    rows = [
+        project,
+        sprint,
+        label,
+        status,
+        view,
+        field,
+        rule,
+        schedule,
+        repository,
+        webhook,
+        add(UserDefaultView(user_id=lena_id, team_id=team_id, view_id=view.id)),
+        add(
+            ShareLink(
+                team_id=team_id,
+                project_id=project.id,
+                view_id=view.id,
+                token_hash="share-token-hash",
+                created_by_id=lena_id,
+            )
+        ),
+        add(GuestEpic(user_id=tomas_id, project_id=project.id)),
+        add(SprintAction(sprint_id=sprint.id, ticket_id=elsewhere, text="Demo")),
+        add(SprintCapacity(sprint_id=sprint.id, user_id=lena_id)),
+        add(CustomFieldValue(ticket_id=elsewhere, field_id=field.id, value="x")),
+        add(
+            Notification(
+                user_id=lena_id,
+                kind=NotificationKind.assigned,
+                ticket_id=elsewhere,
+                custom_field_id=field.id,
+            )
+        ),
+        # A ticket moved away keeps its history under the team it left.
+        add(
+            TicketEvent(
+                ticket_id=elsewhere, team_id=team_id, field=TicketEventField.status
+            )
+        ),
+        add(
+            AutomationRun(
+                team_id=team_id,
+                rule_id=rule.id,
+                rule_name=rule.name,
+                trigger=AutomationTrigger.ticket_created,
+                ticket_id=elsewhere,
+                summary="Urgent",
+            )
+        ),
+        add(ScheduleRun(schedule_id=schedule.id, occurs_on=date(2026, 9, 7))),
+        add(
+            CodeLink(
+                ticket_id=elsewhere,
+                repository_id=repository.id,
+                kind=CodeLinkKind.branch,
+                external_id="demo",
+                url="https://github.com/acme/hackday/tree/demo",
+            )
+        ),
+        add(
+            WebhookDelivery(webhook_id=webhook.id, event="ticket.created", payload="{}")
+        ),
+        add(TicketLabelLink(ticket_id=elsewhere, label_id=label.id)),
+        add(TicketTemplate(team_id=team_id, name="Bug", body="Steps")),
+        add(
+            TeamInvite(
+                team_id=team_id,
+                email="new@softtrack.dev",
+                token="invite-token",
+                invited_by_id=lena_id,
+                expires_at=now + timedelta(days=1),
+            )
+        ),
+        add(
+            TeamJoinRequest(
+                team_id=team_id,
+                requester_id=instance["admin"]["user"]["id"],
+                expires_at=now + timedelta(days=1),
+            )
+        ),
+    ]
+    request = add(
+        TeamRequest(
+            requester_id=lena_id,
+            name="Hackday 2025",
+            key="HCK",
+            reason="For the hackday",
+            state=TeamRequestState.approved,
+            team_id=team_id,
+        )
+    )
+    session.commit()
+    kinds = {type(row).__tablename__ for row in rows} | {"teammember", "teamrequest"}
+    assert kinds >= (TEAM_TABLES - {"ticket"}) | CHILD_TABLES
+    keys = [(type(row), session.identity_key(instance=row)[1]) for row in rows]
+
+    if door == "team admin":
+        response = client.delete(f"/teams/{team_id}", headers=lena["headers"])
+    else:
+        response = client.delete(
+            f"/admin/teams/{team_id}", headers=instance["admin"]["headers"]
+        )
+    assert response.status_code == 204, response.text
+
+    session.expire_all()
+    assert session.get(Team, team_id) is None
+    left = [
+        model.__name__ for model, key in keys if session.get(model, key) is not None
+    ]
+    assert left == []
+    assert (
+        session.exec(
+            select(func.count())
+            .select_from(TeamMember)
+            .where(TeamMember.team_id == team_id)
+        ).one()
+        == 0
+    )
+    session.refresh(request)
+    assert request.team_id is None
+    assert session.exec(text("PRAGMA foreign_key_check")).all() == []

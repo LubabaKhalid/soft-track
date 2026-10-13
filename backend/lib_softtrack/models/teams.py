@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from lib_identity.models.identity import UserPublic
 from lib_softtrack.models.capacity import MAX_CAPACITY_POINTS
@@ -39,10 +39,18 @@ class TeamRead(BaseModel):
     #: whether anybody signed in may join it without asking.
     listed: bool = True
     open_to_join: bool = False
+    #: When the team was archived (#307, #322), or null. An archived team is
+    #: read-only. `archived` says the same as a yes or no, worked out from it.
+    archived_at: Optional[datetime] = None
     archived: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _archived_from_archived_at(self) -> "TeamRead":
+        self.archived = self.archived_at is not None
+        return self
 
 
 class TeamUpdate(BaseModel):
@@ -72,6 +80,8 @@ class TeamUpdate(BaseModel):
     #: Who can find the team (#259). Listed is the default; open is not.
     listed: Optional[bool] = None
     open_to_join: Optional[bool] = None
+    #: Archive the team, or put it back (#322); stored as `Team.archived_at`.
+    #: An archived team takes nothing else until it is unarchived.
     archived: Optional[bool] = None
 
 

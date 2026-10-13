@@ -1045,7 +1045,6 @@ class Team(SQLModel, table=True):
     #: day. Both shrink with the days somebody is away.
     capacity_points: int = Field(default=10)
     capacity_minutes_per_day: int = Field(default=6 * 60)
-    archived: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
     #: Whether the team is in the team directory (#259), where people who are
     #: not on it see its name, key, size and admins and can ask to join. On
@@ -1055,9 +1054,9 @@ class Team(SQLModel, table=True):
     #: organisation -- joins it as a member without asking (#259). Off unless
     #: a team admin turns it on.
     open_to_join: bool = Field(default=False)
-    #: When a site admin archived it from Administration -> Teams (#307);
-    #: null for a team in use. What being archived does to the team itself
-    #: -- read-only, out of the switcher and the pickers -- is #322's.
+    #: When it was archived, by a site admin from Administration -> Teams
+    #: (#307) or by a team admin from its settings (#322); null for a team in
+    #: use. An archived team is read-only (`require_team_not_archived`).
     archived_at: Optional[datetime] = None
 
 

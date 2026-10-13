@@ -691,7 +691,7 @@ def test_a_team_with_tickets_cannot_be_deleted(client, team):
 
     response = client.delete(f"/teams/{team['team']['id']}", headers=team["headers"])
     assert response.status_code == 409
-    assert response.json()["code"] == "team_has_tickets"
+    assert response.json()["code"] == "team_not_empty"
     assert "archive" in response.json()["detail"]
     assert (
         client.get(f"/teams/{team['team']['id']}", headers=team["headers"]).status_code
@@ -713,7 +713,7 @@ def test_a_team_with_a_trashed_ticket_cannot_be_deleted(client, team):
 
     response = client.delete(f"/teams/{team['team']['id']}", headers=team["headers"])
     assert response.status_code == 409
-    assert response.json()["code"] == "team_has_tickets"
+    assert response.json()["code"] == "team_not_empty"
     assert "archive" in response.json()["detail"]
 
     team_response = client.get(f"/teams/{team['team']['id']}", headers=team["headers"])

@@ -22,7 +22,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import delete, update
 from sqlmodel import Session, col, func, select
 
 from lib_identity.models.admin import AdminTeamFilter, AdminTeamRead
@@ -31,41 +30,16 @@ from lib_softtrack import outside
 from lib_softtrack.models.page import DEFAULT_LIMIT, Page
 from lib_softtrack.models.teams import TeamMemberRead
 from lib_softtrack.tables import (
-    AutomationRule,
-    AutomationRun,
-    CodeLink,
     Comment,
-    CustomField,
-    CustomFieldValue,
-    GuestEpic,
-    Label,
-    Notification,
-    OutboundWebhook,
-    Project,
-    Repository,
-    SavedView,
-    ShareLink,
-    Sprint,
-    ScheduleRun,
-    SprintAction,
-    SprintCapacity,
     Team,
-    TeamInvite,
-    TeamJoinRequest,
     TeamMember,
-    TeamRequest,
     TeamRole,
     Ticket,
     TicketEvent,
-    TicketSchedule,
-    TicketTemplate,
     User,
-    UserDefaultView,
-    WebhookDelivery,
-    WorkflowStatus,
     utcnow,
 )
-from lib_softtrack.teams import get_team_or_404, list_members_of
+from lib_softtrack.teams import delete_empty_team, get_team_or_404, list_members_of
 from lib_softtrack.trash import INCLUDE_TRASHED
 from lib_utils.errors import ErrorCode, api_error
 
@@ -297,76 +271,9 @@ def set_archived(
 
 
 def delete_team(session: Session, actor: User, team_id: int) -> None:
-    """Delete a team with no tickets, the trash included: the one made to try
-    the product, or by mistake. A team with work in it is archived instead.
-
-    Everything that belongs to it goes with it, children first so that no
-    foreign key is left pointing at a removed row: its webhooks and their
-    deliveries, rules and their runs, repositories, views and share links,
-    epics, sprints, fields, labels, statuses, templates, invitations and
-    memberships. A request for a team that approving created keeps its row,
-    as the record of who asked; it just no longer names a team.
-    """
+    """Delete any team with no tickets, the trash included. What goes with it
+    is `lib_softtrack.teams.delete_empty_team`, the routine a team admin's
+    own delete (#322) uses too."""
     team = get_team_or_404(team_id, session)
-    tickets = session.exec(
-        select(func.count())
-        .select_from(Ticket)
-        .where(Ticket.team_id == team_id)
-        .execution_options(**INCLUDE_TRASHED)
-    ).one()
-    if tickets:
-        raise api_error(
-            status_code=409,
-            code=ErrorCode.team_not_empty,
-            detail=f"{team.name} has tickets, so it can be archived and not deleted",
-        )
-
-    def of_team(table):
-        return select(table.id).where(table.team_id == team_id).scalar_subquery()
-
-    team.default_view_id = None
-    session.add(team)
-    session.flush()
-    for statement in (
-        delete(WebhookDelivery).where(
-            col(WebhookDelivery.webhook_id).in_(of_team(OutboundWebhook))
-        ),
-        delete(OutboundWebhook).where(OutboundWebhook.team_id == team_id),
-        delete(AutomationRun).where(AutomationRun.team_id == team_id),
-        delete(AutomationRule).where(AutomationRule.team_id == team_id),
-        delete(ScheduleRun).where(
-            col(ScheduleRun.schedule_id).in_(of_team(TicketSchedule))
-        ),
-        delete(TicketSchedule).where(TicketSchedule.team_id == team_id),
-        delete(CodeLink).where(col(CodeLink.repository_id).in_(of_team(Repository))),
-        delete(Repository).where(Repository.team_id == team_id),
-        delete(ShareLink).where(ShareLink.team_id == team_id),
-        delete(UserDefaultView).where(UserDefaultView.team_id == team_id),
-        delete(SavedView).where(SavedView.team_id == team_id),
-        delete(GuestEpic).where(col(GuestEpic.project_id).in_(of_team(Project))),
-        delete(SprintAction).where(col(SprintAction.sprint_id).in_(of_team(Sprint))),
-        delete(SprintCapacity).where(
-            col(SprintCapacity.sprint_id).in_(of_team(Sprint))
-        ),
-        delete(TicketEvent).where(TicketEvent.team_id == team_id),
-        delete(Notification).where(
-            col(Notification.custom_field_id).in_(of_team(CustomField))
-        ),
-        delete(CustomFieldValue).where(
-            col(CustomFieldValue.field_id).in_(of_team(CustomField))
-        ),
-        delete(CustomField).where(CustomField.team_id == team_id),
-        delete(Sprint).where(Sprint.team_id == team_id),
-        delete(Project).where(Project.team_id == team_id),
-        delete(Label).where(Label.team_id == team_id),
-        delete(WorkflowStatus).where(WorkflowStatus.team_id == team_id),
-        delete(TicketTemplate).where(TicketTemplate.team_id == team_id),
-        delete(TeamInvite).where(TeamInvite.team_id == team_id),
-        delete(TeamJoinRequest).where(TeamJoinRequest.team_id == team_id),
-        delete(TeamMember).where(TeamMember.team_id == team_id),
-        update(TeamRequest).where(TeamRequest.team_id == team_id).values(team_id=None),
-    ):
-        session.exec(statement)
-    session.delete(team)
-    session.commit()
+    delete_empty_team(session, team)
     _record("deleted", actor, team)

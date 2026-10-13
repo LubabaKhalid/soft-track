@@ -21,6 +21,7 @@ export interface TeamRead {
   capacity_minutes_per_day?: number;
   listed?: boolean;
   open_to_join?: boolean;
+  archived_at?: string | null;
   archived?: boolean;
   created_at: string;
 }

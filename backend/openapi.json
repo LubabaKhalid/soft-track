@@ -25215,6 +25215,18 @@
             "title": "Open To Join",
             "default": false
           },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
           "archived": {
             "type": "boolean",
             "title": "Archived",
@@ -28617,7 +28629,6 @@
           "last_site_admin",
           "last_status",
           "team_has_no_statuses",
-          "team_has_tickets",
           "cannot_deactivate_self",
           "cannot_demote_self",
           "sprint_completed",
