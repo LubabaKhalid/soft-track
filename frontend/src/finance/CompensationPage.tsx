@@ -1,14 +1,26 @@
-import { keepPreviousData } from '@tanstack/react-query'
+import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useListCompensationFinanceCompensationGet } from '@/api/generated/endpoints/compensation/compensation'
 import { useListDepartmentsDepartmentsGet } from '@/api/generated/endpoints/departments/departments'
-import type { CompensationKind, CompensationRow, Currency } from '@/api/generated/models'
+import {
+  useGetPayrollTypesFinancePayrollTypesGet,
+  useSetPayrollTypesFinancePayrollTypesPut,
+} from '@/api/generated/endpoints/payroll/payroll'
+import {
+  type CompensationKind,
+  type CompensationPage as CompensationPageData,
+  type CompensationRow,
+  type Currency,
+  EmploymentType,
+} from '@/api/generated/models'
 import { formatChange, formatDay } from '@/finance/money'
+import { isFinanceQuery } from '@/finance/queries'
 import { RecordPayDialog } from '@/finance/RecordPayDialog'
 import { useCurrencies } from '@/finance/useCurrencies'
 import { useTranslation } from '@/i18n'
+import { formatNames } from '@/i18n/format'
 import { useDebounced } from '@/search/useDebounced'
 import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/Icon'
@@ -18,7 +30,8 @@ import { Select } from '@/ui/Select'
 const PAGE_SIZE = 50
 
 /**
- * Finance → Compensation (#131): what everybody active is paid today.
+ * Finance → Compensation (#131): what everybody on payroll (#320) is paid
+ * today.
  *
  * The current figure is the latest record in effect; a raise dated ahead is
  * scheduled, and somebody with nothing in effect says so in red -- what a
@@ -168,6 +181,8 @@ export default function CompensationPage() {
           </div>
         )}
 
+        {page.data && <WhoIsOnPayroll page={page.data} />}
+
         {total > PAGE_SIZE && (
           <div className="hairline mt-4 flex items-center justify-between border-t pt-4">
             <p className="text-xs text-neutral-400">
@@ -202,6 +217,81 @@ export default function CompensationPage() {
       </section>
 
       {recording && <RecordPayDialog onClose={() => setRecording(false)} />}
+    </div>
+  )
+}
+
+/** The employment types finance may put on payroll besides employees. */
+const SWITCHABLE = [
+  EmploymentType.contractor,
+  EmploymentType.intern,
+  EmploymentType.service_account,
+] as const
+
+/**
+ * Under the list (#320): how many people are on payroll, the accounts that
+ * are not, and which other employment types finance puts on it.
+ */
+function WhoIsOnPayroll({ page }: { page: CompensationPageData }) {
+  const { t } = useTranslation(['finance', 'common'])
+  const queryClient = useQueryClient()
+  const types = useGetPayrollTypesFinancePayrollTypesGet()
+  const setTypes = useSetPayrollTypesFinancePayrollTypesPut()
+  const [error, setError] = useState<string | null>(null)
+  // Ticked at once, not when the server answers; put back if it refuses.
+  const [saving, setSaving] = useState<EmploymentType[] | null>(null)
+  const on = saving ?? types.data?.types ?? []
+
+  const toggle = async (kind: EmploymentType, checked: boolean) => {
+    setError(null)
+    const next = checked ? [...on, kind] : on.filter((other) => other !== kind)
+    setSaving(next)
+    try {
+      await setTypes.mutateAsync({ data: { types: next } })
+      await queryClient.invalidateQueries({ predicate: isFinanceQuery })
+    } catch {
+      setError(t('compensation.payrollTypesFailed'))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  return (
+    <div className="hairline mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-4 text-xs text-neutral-500">
+      <p>
+        {t('compensation.onPayroll', { count: page.on_payroll })}
+        {page.not_on_payroll.length > 0 && (
+          <>
+            {' · '}
+            {t('compensation.notOnPayroll', {
+              count: page.not_on_payroll.length,
+              names: formatNames(page.not_on_payroll.map((account) => account.name)),
+            })}
+          </>
+        )}
+      </p>
+      {types.data && (
+        <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <legend className="float-left mr-1">{t('compensation.alsoOnPayroll')}</legend>
+          {SWITCHABLE.map((kind) => (
+            <label key={kind} className="flex items-center gap-1.5 text-neutral-700">
+              <input
+                type="checkbox"
+                checked={on.includes(kind)}
+                disabled={setTypes.isPending}
+                onChange={(e) => void toggle(kind, e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--color-brand-600)]"
+              />
+              {t(`compensation.payrollTypes.${kind}`)}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {error && (
+        <p role="alert" className="basis-full text-danger-600">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

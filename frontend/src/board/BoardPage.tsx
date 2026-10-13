@@ -15,6 +15,8 @@ import {
   fromSearchParams,
   fromViewFilters,
   sameFilters,
+  whenIsSet,
+  searchString,
   toQueryParams,
   toSearchParams,
 } from '@/board/filters'
@@ -57,6 +59,7 @@ import { ProjectPage } from '@/projects/ProjectPage'
 import { RoadmapView } from '@/projects/RoadmapView'
 import { useTeamEvents } from '@/realtime/useTeamEvents'
 import { ReportsView } from '@/reports/ReportsView'
+import { PlanView } from '@/sprints/PlanView'
 import { SearchResults } from '@/search/SearchResults'
 import { useDebounced } from '@/search/useDebounced'
 import { rememberTeam } from '@/team/lastTeam'
@@ -110,7 +113,7 @@ export default function BoardPage() {
   // The team's reports are not for somebody from outside the organisation
   // (#243), who sees only the epics they were given.
   const setView = (next: BoardView) =>
-    setBoardView(user?.is_external && next === 'reports' ? 'board' : next)
+    setBoardView(user?.is_external && (next === 'reports' || next === 'plan') ? 'board' : next)
   const [search, setSearch] = useState(returning?.search ?? '')
   // The sidebar is a drawer below the `lg` breakpoint.
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -120,7 +123,7 @@ export default function BoardPage() {
   // The URL is the filter state, not a copy of it. That is what makes any
   // board someone is looking at a link they can paste, and it gets working
   // back and forward buttons for free.
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const filters = useMemo(() => fromSearchParams(searchParams), [searchParams])
   const grouping = groupingFromSearchParams(searchParams)
   const sort = sortFromSearchParams(searchParams)
@@ -133,15 +136,17 @@ export default function BoardPage() {
       nextSort: BoardSort,
       options?: { replace: boolean },
     ) =>
-      setSearchParams((current) => {
-        const next = withSort(withGrouping(toSearchParams(nextFilters), nextGrouping), nextSort)
-        // The calendar's month (#105) is not a filter, but narrowing the
-        // calendar should not also jump it back to this month.
-        const month = current.get('month')
-        if (month) next.set('month', month)
-        return next
-      }, options),
-    [setSearchParams],
+    {
+      const next = withSort(withGrouping(toSearchParams(nextFilters), nextGrouping), nextSort)
+      // The calendar's month (#105) is not a filter, but narrowing the
+      // calendar should not also jump it back to this month.
+      const month = searchParams.get('month')
+      if (month) next.set('month', month)
+      // Navigated to rather than set, so an excluded filter reads `status!=5`
+      // in the address bar instead of `status%21=5` (#260).
+      navigate({ pathname: location.pathname, search: searchString(next) }, options)
+    },
+    [navigate, location.pathname, searchParams],
   )
   /** Undefined leaves the arrangement as it is; a saved view brings its own. */
   const setFilters = useCallback(
@@ -252,10 +257,15 @@ export default function BoardPage() {
   // Search runs on the server. The old client-side filter could only see the
   // page that was already loaded, and only matched titles.
   const searchQuery = useDebounced(search.trim(), 250)
-  const searchResults = useSearchSearchGet(
-    { q: searchQuery || 'x', team_id: team?.id, limit: 50 },
-    { query: { enabled: Boolean(team) && searchQuery.length > 0 } },
+  // The board's filters go with it (#261): a search is narrowed where it
+  // is, by the chips above it, rather than by leaving it for the list.
+  const searchRequest = useMemo(
+    () => ({ ...toQueryParams(filters), q: searchQuery || 'x', team_id: team?.id, limit: 50 }),
+    [filters, searchQuery, team?.id],
   )
+  const searchResults = useSearchSearchGet(searchRequest, {
+    query: { enabled: Boolean(team) && searchQuery.length > 0 },
+  })
 
   // A guest (#104) is offered nothing that writes. The server refuses them
   // regardless; this only keeps the board from offering what will fail.
@@ -266,11 +276,13 @@ export default function BoardPage() {
   const openNewProject = canWrite ? openNewProjectNow : undefined
   const openShortcuts = useCallback(() => overlays.open('shortcuts'), [overlays])
   const togglePalette = useCallback(() => overlays.toggle('palette'), [overlays])
+  const openMyWork = useCallback(() => navigate('/my-work'), [navigate])
 
   useGlobalShortcuts({
     togglePalette,
     closeTop: overlays.closeTop,
     openNewTicket,
+    openMyWork,
     openShortcuts,
     suppressed: overlays.isOpen('palette') || overlays.isOpen('shortcuts'),
   })
@@ -488,6 +500,8 @@ export default function BoardPage() {
                   <RoadmapView />
                 ) : view === 'reports' ? (
                   <ReportsView />
+                ) : view === 'plan' ? (
+                  <PlanView />
                 ) : view === 'board' ? (
                   <KanbanBoard
                     tickets={tickets}
@@ -504,6 +518,7 @@ export default function BoardPage() {
                   <TicketListView
                     tickets={tickets}
                     grouping={grouping}
+                    showUpdated={whenIsSet(filters.updated) || sort.sort === 'updated'}
                     selectedIds={selection.ids}
                     onSelect={canWrite ? selectTicket : undefined}
                   />

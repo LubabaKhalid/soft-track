@@ -5,12 +5,12 @@ import re
 import secrets
 from functools import lru_cache
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, func, select
 
-from lib_identity import api_tokens
-from lib_identity.models.identity import Token, UserMe, UserUpdate
+from lib_identity import api_tokens, sessions
+from lib_identity.models.identity import Token, UserUpdate
 from lib_identity.usernames import (
     assert_username_free,
     derive_username,
@@ -20,7 +20,7 @@ from lib_softtrack.outside import confine
 from lib_softtrack.tables import User, utcnow
 from lib_utils.password import hash_password, is_usable_password, verify_password
 from lib_utils.rate_limit import address_of, api_token_by_address
-from lib_utils.token import create_access_token, decode_access_token, is_access_token
+from lib_utils.token import decode_access_token, is_access_token
 from web import get_session, settings
 from lib_utils.errors import ErrorCode, api_error
 
@@ -110,6 +110,13 @@ def get_current_user(
     # upgrade itself.
     if payload.get("ver", 0) != user.token_version:
         raise credentials_exception
+    # The session the token belongs to (#308) has to be live as well: one can
+    # be revoked without the others. A token from before sessions carries no
+    # `sid`, and the checks above are all it ever had.
+    if "sid" in payload:
+        if not sessions.authenticate(session, user, payload["sid"]):
+            raise credentials_exception
+        request.state.session_id = payload["sid"]
     # Somebody from outside sees only the epics they were given (#243), on
     # every query this request makes from here on.
     confine(session, user)
@@ -135,18 +142,19 @@ def get_current_insider(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def ticket_token(user: User) -> Token:
+def ticket_token(
+    session: Session,
+    user: User,
+    request: Request,
+    background: BackgroundTasks | None = None,
+) -> Token:
     """A signed-in session for `user`: the bearer token plus their own record.
 
     Public because signing in with Google or GitHub ends the same way an
-    email and password sign-in does -- see `lib_identity/oauth.py`.
+    email and password sign-in does -- see `lib_identity/oauth.py`. Each one
+    is a row in the account's list of sessions (#308).
     """
-    return Token(
-        access_token=create_access_token(
-            subject=str(user.id), version=user.token_version
-        ),
-        user=UserMe.model_validate(user),
-    )
+    return sessions.start(session, user, request, background)
 
 
 def create_user(
@@ -156,6 +164,7 @@ def create_user(
     full_name: str,
     hashed_password: str,
     username: str | None = None,
+    activated: bool = True,
 ) -> User:
     """The row every new account starts as, however it was created.
 
@@ -175,6 +184,7 @@ def create_user(
     # so it has to be automatic or a fresh install has no administrator.
     is_first = session.exec(select(func.count()).select_from(User)).one() == 0
 
+    external = not is_first and invited_from_outside(session, email)
     user = User(
         email=email,
         username=handle,
@@ -184,11 +194,13 @@ def create_user(
         is_site_admin=is_first,
         # Invited from outside the organisation (#243): what the account is
         # from the start, decided by the invitation and never by the person.
-        is_external=not is_first and invited_from_outside(session, email),
+        is_external=external,
         # Creating an account hands out a token, so it *is* a sign-in. Leaving
         # this null would show someone who signed up a minute ago as "never
-        # signed in" in the admin directory.
-        last_login_at=utcnow(),
+        # signed in" in the admin directory. Not so for one a site admin
+        # prepared (#303): its owner has not been near it yet.
+        last_login_at=utcnow() if activated else None,
+        is_activated=activated,
     )
     session.add(user)
     session.commit()
@@ -203,6 +215,8 @@ def register_user(
     full_name: str,
     username: str | None = None,
     invite_token: str | None = None,
+    *,
+    request: Request,
 ) -> Token:
     from lib_softtrack.invites import accept_invite, find_live_invite
 
@@ -240,7 +254,7 @@ def register_user(
         except HTTPException:
             pass
 
-    return ticket_token(user)
+    return ticket_token(session, user, request)
 
 
 @lru_cache(maxsize=1)
@@ -258,7 +272,14 @@ def warm_password_hasher() -> None:
     _unmatchable_hash()
 
 
-def login_user(session: Session, email: str, password: str) -> Token:
+def login_user(
+    session: Session,
+    email: str,
+    password: str,
+    *,
+    request: Request,
+    background: BackgroundTasks | None = None,
+) -> Token:
     user = find_user_by_email(session, email)
 
     # Verify against a hash that cannot match rather than returning early, so
@@ -295,7 +316,7 @@ def login_user(session: Session, email: str, password: str) -> Token:
     session.add(user)
     session.commit()
     session.refresh(user)
-    return ticket_token(user)
+    return ticket_token(session, user, request, background)
 
 
 def _profile_text(value: str | None) -> str | None:
@@ -370,7 +391,7 @@ def update_profile(session: Session, user: User, payload: UserUpdate) -> User:
 
 
 def change_password(
-    session: Session, user: User, current: str | None, new: str
+    session: Session, user: User, current: str | None, new: str, request: Request
 ) -> Token:
     """Change the password -- or set the first one, for an account without.
 
@@ -398,15 +419,16 @@ def change_password(
     session.refresh(user)
     # A fresh token for the tab that made the change, so the person who just
     # secured their account is not the one thrown out of it.
-    return ticket_token(user)
+    return sessions.reissue(session, user, request)
 
 
-def sign_out_everywhere(session: Session, user: User) -> Token:
+def sign_out_everywhere(session: Session, user: User, request: Request) -> Token:
+    """End every session but this one (#308 keeps it as it was)."""
     user.token_version += 1
     session.add(user)
     session.commit()
     session.refresh(user)
-    return ticket_token(user)
+    return sessions.reissue(session, user, request)
 
 
 def list_my_invites(session: Session, user: User):

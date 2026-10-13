@@ -37,15 +37,35 @@ NOT_TEAM_WRITES = {
     ("POST", "/auth/me/tokens"): "your own account",
     ("DELETE", "/auth/me/tokens/{token_id}"): "your own account",
     ("POST", "/auth/me/sign-out-everywhere"): "your own account",
+    ("DELETE", "/auth/me/sessions/{session_id}"): "your own account",
+    ("POST", "/auth/sign-out"): "your own account",
     ("POST", "/auth/oauth/exchange"): "your own account",
     ("POST", "/auth/oauth/{provider}/link-ticket"): "your own account",
     ("POST", "/auth/oauth/link"): "your own account",
     ("DELETE", "/auth/me/identities/{provider}"): "your own account",
     ("PATCH", "/admin/users/{user_id}"): "site admins, not team roles",
     ("POST", "/admin/users/{user_id}/reset-password"): "site admins, not team roles",
+    ("POST", "/admin/users/{user_id}/end-sessions"): "site admins, not team roles",
+    # Accounts a site admin creates (#303).
+    ("POST", "/admin/users"): "site admins, not team roles",
+    ("POST", "/admin/users/{user_id}/welcome-link"): "site admins, not team roles",
     ("POST", "/departments"): "site admins, not team roles",
     ("PATCH", "/departments/{department_id}"): "site admins, not team roles",
     ("DELETE", "/departments/{department_id}"): "site admins, not team roles",
+    ("PUT", "/admin/team-creation"): "site admins, not team roles",
+    (
+        "POST",
+        "/admin/team-requests/{request_id}/approve",
+    ): "site admins, not team roles",
+    (
+        "POST",
+        "/admin/team-requests/{request_id}/decline",
+    ): "site admins, not team roles",
+    # Every team on the instance (#307): the site admin's, on any team.
+    ("POST", "/admin/teams/{team_id}/admins"): "site admins, not team roles",
+    ("POST", "/admin/teams/{team_id}/archive"): "site admins, not team roles",
+    ("POST", "/admin/teams/{team_id}/unarchive"): "site admins, not team roles",
+    ("DELETE", "/admin/teams/{team_id}"): "site admins, not team roles",
     # Money (#130-#137): the finance flag decides, not any team role.
     ("POST", "/finance/compensation/{username}"): "finance admins, not team roles",
     ("POST", "/finance/payroll/runs"): "finance admins, not team roles",
@@ -63,6 +83,7 @@ NOT_TEAM_WRITES = {
         "/finance/payroll/runs/{run_id}/approve",
     ): "finance admins, not team roles",
     ("POST", "/finance/payroll/runs/{run_id}/paid"): "finance admins, not team roles",
+    ("PUT", "/finance/payroll/types"): "finance admins, not team roles",
     (
         "POST",
         "/finance/expenses/{expense_id}/approve",
@@ -96,6 +117,15 @@ NOT_TEAM_WRITES = {
     ("PUT", "/expenses/{expense_id}/receipt"): "your own claims",
     ("DELETE", "/expenses/{expense_id}/receipt"): "your own claims",
     ("POST", "/teams"): "a new team, which its creator admins",
+    ("POST", "/teams/requests"): "asking for a new team (#306)",
+    # Finding a team and asking to join it (#259): somebody not on the team
+    # yet, whom a guest of it already is -- they are refused as a member.
+    ("POST", "/teams/{team_id}/join"): "joining a team you are not on",
+    ("POST", "/teams/{team_id}/join-requests"): "asking to join a team you are not on",
+    (
+        "DELETE",
+        "/teams/join-requests/{join_request_id}",
+    ): "withdrawing your own request to join",
     # The invite link is the authority, and it names the role.
     ("POST", "/invites/{token}/accept"): "the invitation decides the role",
     ("POST", "/invites/{token}/decline"): "the invitation decides the role",
@@ -169,7 +199,7 @@ def guest(client, team, auth):
 
 
 @pytest.fixture
-def world(client, team, guest):
+def world(client, team, guest, auth):
     """One of every row a mutating team route can name in its path.
 
     Keyed by the path parameter it fills. A route that names a parameter not
@@ -238,9 +268,19 @@ def world(client, team, guest):
         f"/teams/{team_id}/custom-fields", json={"name": "Reviewer", "kind": "user"}
     )
     label = post(f"/teams/{team_id}/labels", json={"name": "Bug"})
+    schedule = post(
+        f"/teams/{team_id}/ticket-schedules",
+        json={"title": "Dependency updates", "frequency": "weekly", "weekdays": [0]},
+    )
     share_link = post(
         f"/teams/{team_id}/share-links", json={"project_id": project["id"]}
     )
+    # Somebody on no team asking to join it (#259): deciding is the write.
+    asker = auth(email="asker@example.com", full_name="Yuki Sato")
+    join_request = client.post(
+        f"/teams/{team_id}/join-requests", json={}, headers=asker["headers"]
+    )
+    assert join_request.status_code == 200, join_request.text
     return {
         "team_id": team_id,
         "ticket_id": ticket["id"],
@@ -259,8 +299,12 @@ def world(client, team, guest):
         "template_id": template["id"],
         "field_id": field["id"],
         "label_id": label["id"],
+        "schedule_id": schedule["id"],
         "worklog_id": worklog["id"],
+        # A timesheet cell (#267): my time on a ticket on a day.
+        "worked_on": date.today().isoformat(),
         "share_link_id": share_link["link"]["id"],
+        "join_request_id": join_request.json()["id"],
         # Somebody else on the team: changing *their* role is the write.
         "user_id": team["user"]["id"],
     }
@@ -373,6 +417,7 @@ def test_a_guest_sees_what_a_member_sees(client, team, guest, world):
         f"/tickets/{ticket_id}/attachments",
         f"/tickets/{ticket_id}/links",
         f"/sprints/{world['sprint_id']}/burndown",
+        f"/sprints/{world['sprint_id']}/plan",
         f"/attachments/{world['attachment_id']}/content",
     ):
         response = client.get(path, headers=guest["headers"])

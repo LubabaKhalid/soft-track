@@ -6,7 +6,7 @@ import {
   useListTeamMembersTeamsTeamIdMembersGet,
   useUpdateTeamTeamsTeamIdPatch,
 } from '@/api/generated/endpoints/teams/teams'
-import type { TeamRead } from '@/api/generated/models'
+import type { EstimateUnit, TeamRead } from '@/api/generated/models'
 import { errorDetail } from '@/api/errors'
 import { useAuth } from '@/auth/useAuth'
 import { Trans, userText, useTranslation } from '@/i18n'
@@ -41,6 +41,7 @@ export default function TeamGeneralSettings() {
   return (
     <div className="space-y-4">
       <TeamGeneralForm key={team.id} team={team} isAdmin={isAdmin} />
+      <Findable key={`findable-${team.id}`} team={team} isAdmin={isAdmin} />
       <GuestsMayComment
         key={`guests-${team.id}`}
         team={team}
@@ -49,8 +50,85 @@ export default function TeamGeneralSettings() {
           .filter((member) => member.role === 'guest')
           .map((member) => member.user.full_name)}
       />
+      <EstimateUnitSetting key={`estimates-${team.id}`} team={team} isAdmin={isAdmin} />
+      <CapacityDefaults key={`capacity-${team.id}`} team={team} isAdmin={isAdmin} />
       <DeletePolicy key={`delete-${team.id}`} team={team} isAdmin={isAdmin} />
     </div>
+  )
+}
+
+/**
+ * Who can find the team (#259): whether it is in the team directory, and
+ * whether anybody signed in joins it as a member without asking. Listed is
+ * the default and open is not. Each saved as soon as it is switched.
+ */
+function Findable({ team, isAdmin }: { team: TeamRead; isAdmin: boolean }) {
+  const { t } = useTranslation(['settings', 'common'])
+  const queryClient = useQueryClient()
+  const updateTeam = useUpdateTeamTeamsTeamIdPatch()
+  const [listed, setListed] = useState(team.listed ?? true)
+  const [open, setOpen] = useState(team.open_to_join ?? false)
+  const [error, setError] = useState<string | null>(null)
+  const id = useId()
+
+  const save = async (data: { listed?: boolean; open_to_join?: boolean }, undo: () => void) => {
+    setError(null)
+    try {
+      await updateTeam.mutateAsync({ teamId: team.id, data })
+      queryClient.invalidateQueries({ queryKey: ['/teams'] })
+    } catch (err: unknown) {
+      undo()
+      setError(errorDetail(err, t('general.errors.findable')))
+    }
+  }
+
+  const row = (
+    switchId: string,
+    label: string,
+    hint: string,
+    checked: boolean,
+    onChange: (value: boolean) => void,
+  ) => (
+    <div className="flex items-start justify-between gap-4">
+      <label htmlFor={switchId} className="min-w-0">
+        <span className="block text-sm font-medium text-neutral-800">{label}</span>
+        <span className="block text-xs text-neutral-500">{hint}</span>
+      </label>
+      <input
+        id={switchId}
+        type="checkbox"
+        role="switch"
+        className="switch mt-0.5 shrink-0"
+        checked={checked}
+        disabled={!isAdmin || updateTeam.isPending}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </div>
+  )
+
+  return (
+    <section className="glass-strong rounded-panel p-6" aria-labelledby={`${id}-heading`}>
+      <p id={`${id}-heading`} className="eyebrow">
+        {t('general.findable.heading')}
+      </p>
+      <div className="mt-2">
+        {row(`${id}-listed`, t('general.findable.listed'), t('general.findable.listedHint'), listed, (value) => {
+          setListed(value)
+          void save({ listed: value }, () => setListed(!value))
+        })}
+      </div>
+      <div className="mt-4 border-t border-neutral-900/8 pt-4">
+        {row(`${id}-open`, t('general.findable.open'), t('general.findable.openHint'), open, (value) => {
+          setOpen(value)
+          void save({ open_to_join: value }, () => setOpen(!value))
+        })}
+      </div>
+      {error && (
+        <p role="alert" className="mt-3 rounded-control bg-danger-50 px-3 py-2 text-sm text-danger-700">
+          {error}
+        </p>
+      )}
+    </section>
   )
 }
 
@@ -124,6 +202,173 @@ function GuestsMayComment({
             })}
       </p>
     </section>
+  )
+}
+
+/**
+ * What the team estimates in (#268): points, hours or both. Points is the
+ * default, and a team that leaves it sees no change. Saved as soon as it is
+ * chosen, like who may delete.
+ */
+function EstimateUnitSetting({ team, isAdmin }: { team: TeamRead; isAdmin: boolean }) {
+  const { t } = useTranslation(['settings', 'common'])
+  const queryClient = useQueryClient()
+  const updateTeam = useUpdateTeamTeamsTeamIdPatch()
+  const [unit, setUnit] = useState<EstimateUnit>(team.estimate_unit ?? 'points')
+  const [error, setError] = useState<string | null>(null)
+  const name = useId()
+
+  const choose = async (value: EstimateUnit) => {
+    const before = unit
+    setUnit(value)
+    setError(null)
+    try {
+      await updateTeam.mutateAsync({ teamId: team.id, data: { estimate_unit: value } })
+      queryClient.invalidateQueries({ queryKey: ['/teams'] })
+    } catch (err: unknown) {
+      setUnit(before)
+      setError(errorDetail(err, t('general.errors.estimates')))
+    }
+  }
+
+  const option = (value: EstimateUnit, label: string, hint?: string) => (
+    <label className="flex items-start gap-2.5">
+      <input
+        type="radio"
+        name={name}
+        checked={unit === value}
+        disabled={!isAdmin || updateTeam.isPending}
+        onChange={() => choose(value)}
+        className="mt-0.5 h-4 w-4 accent-[var(--color-brand-600)]"
+      />
+      <span>
+        <span className="block text-sm text-neutral-800">{label}</span>
+        {hint && <span className="block text-xs text-neutral-500">{hint}</span>}
+      </span>
+    </label>
+  )
+
+  return (
+    <section className="glass-strong rounded-panel p-6" aria-labelledby={`${name}-heading`}>
+      <p className="eyebrow">{t('general.estimates.heading')}</p>
+      <fieldset className="mt-2">
+        <legend id={`${name}-heading`} className="text-sm font-medium text-neutral-800">
+          {t('general.estimates.question')}
+        </legend>
+        <div className="mt-3 space-y-3">
+          {option('points', t('general.estimates.points'), t('general.estimates.pointsHint'))}
+          {option('hours', t('general.estimates.hours'))}
+          {option('both', t('general.estimates.both'), t('general.estimates.bothHint'))}
+        </div>
+      </fieldset>
+      {error && (
+        <p
+          role="alert"
+          className="mt-3 rounded-control bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        >
+          {error}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/**
+ * What each person can take in a sprint before anybody changes it (#269):
+ * points for a whole sprint, and hours for each working day. Both shrink
+ * with the days somebody is away, and either can be changed per person and
+ * per sprint on the Plan tab.
+ */
+function CapacityDefaults({ team, isAdmin }: { team: TeamRead; isAdmin: boolean }) {
+  const { t } = useTranslation(['settings', 'common'])
+  const queryClient = useQueryClient()
+  const updateTeam = useUpdateTeamTeamsTeamIdPatch()
+  const [points, setPoints] = useState(String(team.capacity_points ?? 10))
+  const [hours, setHours] = useState(String((team.capacity_minutes_per_day ?? 360) / 60))
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const id = useId()
+
+  const onSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    setSaved(false)
+    try {
+      await updateTeam.mutateAsync({
+        teamId: team.id,
+        data: {
+          capacity_points: Math.max(Math.round(Number(points) || 0), 0),
+          capacity_minutes_per_day: Math.max(Math.round((Number(hours) || 0) * 60), 0),
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ['/teams'] })
+      // The plans worked out from the old defaults.
+      queryClient.invalidateQueries({
+        predicate: (query) => String(query.queryKey[0] ?? '').endsWith('/plan'),
+      })
+      setSaved(true)
+    } catch (err: unknown) {
+      setError(errorDetail(err, t('general.errors.capacity')))
+    }
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="glass-strong rounded-panel p-6"
+      aria-labelledby={`${id}-heading`}
+    >
+      <p className="eyebrow" id={`${id}-heading`}>
+        {t('general.capacity.heading')}
+      </p>
+      <p className="mt-2 text-sm text-neutral-600">{t('general.capacity.intro')}</p>
+      <div className="mt-3 flex flex-wrap items-end gap-4">
+        <label className="text-sm text-neutral-800">
+          <span className="mb-1 block text-xs text-neutral-500">
+            {t('general.capacity.points')}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={1000}
+            step={1}
+            value={points}
+            disabled={!isAdmin}
+            onChange={(e) => setPoints(e.target.value)}
+            className="field w-24"
+          />
+        </label>
+        <label className="text-sm text-neutral-800">
+          <span className="mb-1 block text-xs text-neutral-500">
+            {t('general.capacity.hours')}
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={24}
+            step={0.5}
+            value={hours}
+            disabled={!isAdmin}
+            onChange={(e) => setHours(e.target.value)}
+            className="field w-24"
+          />
+        </label>
+        {isAdmin && (
+          <button type="submit" className="btn btn-primary" disabled={updateTeam.isPending}>
+            {t('general.capacity.save')}
+          </button>
+        )}
+        {saved && <span className="text-xs text-neutral-500">{t('general.capacity.saved')}</span>}
+      </div>
+      {error && (
+        <p
+          role="alert"
+          className="mt-3 rounded-control bg-danger-50 px-3 py-2 text-sm text-danger-700"
+        >
+          {error}
+        </p>
+      )}
+    </form>
   )
 }
 

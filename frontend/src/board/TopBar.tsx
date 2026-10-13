@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react'
 import { AXIOS_INSTANCE } from '@/api/client'
 import { useAuth } from '@/auth/useAuth'
 import { FilterBar } from '@/board/FilterBar'
-import { toQueryParams } from '@/board/filters'
+import { toQueryString } from '@/board/filters'
 import type { BoardFilters } from '@/board/filters'
 import type { BoardGrouping } from '@/board/grouping'
 import { type BoardSort, SORT_OPTIONS } from '@/board/sorting'
@@ -22,6 +22,8 @@ const VIEWS: Array<{ id: BoardView; icon: IconName }> = [
   { id: 'calendar', icon: 'calendar-grid' },
   { id: 'roadmap', icon: 'calendar' },
   { id: 'reports', icon: 'chart' },
+  // Sprint capacity (#269): beside Reports.
+  { id: 'plan', icon: 'users' },
 ]
 
 export function TopBar({
@@ -69,8 +71,11 @@ export function TopBar({
   const { team } = useTeamContext()
   const { user } = useAuth()
   const { t } = useTranslation(['board', 'common'])
-  // Somebody from outside sees their epics, not the team's reports (#243).
-  const views = VIEWS.filter((item) => !(user?.is_external && item.id === 'reports'))
+  // Somebody from outside sees their epics, not the team's reports (#243)
+  // or who can take what (#269).
+  const views = VIEWS.filter(
+    (item) => !(user?.is_external && (item.id === 'reports' || item.id === 'plan')),
+  )
 
   return (
     <header className="glass flex flex-wrap items-center gap-2 rounded-panel px-3 py-2">
@@ -247,10 +252,9 @@ function ExportCsvButton({
     setLoading(true)
     setFailed(false)
     try {
-      const params = new URLSearchParams()
-      for (const [key, value] of Object.entries(toQueryParams(filters))) {
-        if (value !== undefined && value !== null) params.set(key, String(value))
-      }
+      // The board's own filters, lists repeated, so the file holds what the
+      // board shows (#260).
+      const params = toQueryString(filters)
 
       // The generated client rather than a hand-written URL would be nicer,
       // but its mutator resolves every response as JSON: a download needs

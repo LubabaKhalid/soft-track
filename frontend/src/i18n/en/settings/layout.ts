@@ -25,6 +25,8 @@ export const layout = {
     general: 'General',
     users: 'Users',
     departments: 'Departments',
+    teams: 'Teams',
+    instanceSettings: 'Settings',
     compensation: 'Compensation',
     payroll: 'Payroll runs',
     expenses: 'Expenses',

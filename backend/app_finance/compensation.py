@@ -31,9 +31,10 @@ def list_compensation(
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
-    """Everybody active and what they are paid today, with totals per currency
-    and pay schedule over everybody the filters match. People with nothing in
-    effect come last, and are counted in `missing`."""
+    """Everybody on payroll (#320) and what they are paid today, with totals
+    per currency and pay schedule over everybody the filters match. People
+    with nothing in effect come last, and are counted in `missing`; the
+    accounts that are not on payroll are counted and named beside them."""
     return compensation_service.list_compensation(
         session,
         today(),

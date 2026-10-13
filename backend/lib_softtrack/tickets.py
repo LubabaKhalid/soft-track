@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Iterator
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import NamedTuple, Optional, Union
 
 from fastapi import HTTPException
@@ -26,25 +26,27 @@ from lib_softtrack.models.tickets import (
 )
 from lib_softtrack.models.page import DEFAULT_LIMIT, Page
 from lib_softtrack.models.statuses import StatusRead
+from lib_softtrack.models.views import ViewFilters
 from lib_softtrack.history import record_changes, record_creation, snapshot
 from lib_softtrack import notifications as notifications_service
 from lib_softtrack import automations as automations_service
 from lib_softtrack import integrations as integrations_service
 from lib_softtrack import reactions as reactions_service
 from lib_softtrack import rules as rules_service
+from lib_softtrack.filters import filter_clauses
 from lib_softtrack.links import open_blocker_counts
 from lib_softtrack.tables import (
+    ScheduleRun,
     SprintAction,
     Comment,
     Sprint,
-    DueFilter,
     Ticket,
     TicketEvent,
+    TicketEventField,
     TicketLabelLink,
     TicketLink,
     TicketPriority,
     TicketSort,
-    TicketType,
     Label,
     Project,
     SortDirection,
@@ -115,6 +117,8 @@ def ticket_to_read(ticket: Ticket, session: Session) -> TicketRead:
         rank=ticket.rank,
         assignee=UserPublic.model_validate(assignee) if assignee else None,
         estimate=ticket.estimate,
+        time_estimate_minutes=ticket.time_estimate_minutes,
+        remaining_minutes=ticket.remaining_minutes,
         blocked_by_count=open_blocker_counts(session, [ticket.id]).get(ticket.id, 0),
         sprint_id=ticket.sprint_id,
         due_date=ticket.due_date,
@@ -208,6 +212,8 @@ def _expand_tickets(tickets: list[Ticket], session: Session) -> list[TicketRead]
                 else None
             ),
             estimate=ticket.estimate,
+            time_estimate_minutes=ticket.time_estimate_minutes,
+            remaining_minutes=ticket.remaining_minutes,
             blocked_by_count=blocker_counts.get(ticket.id, 0),
             sprint_id=ticket.sprint_id,
             due_date=ticket.due_date,
@@ -271,6 +277,55 @@ def create_ticket(
     )
     custom_fields_service.require_filled(session, team_id, payload.type, field_changes)
 
+    ticket = _insert_ticket(
+        session, team, payload, creator=current_user, actor=current_user
+    )
+    applied = custom_fields_service.write(
+        session, ticket, field_changes, current_user, record=False
+    )
+    return _announce_creation(session, ticket, payload, current_user, applied.named)
+
+
+def create_scheduled(
+    session: Session, team: Team, payload: TicketCreate, creator: User, name: str
+) -> Ticket:
+    """A ticket a schedule creates (#264), down the path a person's takes.
+
+    The same number, history, notifications, webhooks and rules; what
+    differs is who. Nobody did it, so the actor of all of that is null, as it
+    is for an automation rule, and the history opens with which schedule
+    created it. The creator is whoever wrote the schedule: the column needs
+    somebody, and that is who asked for the ticket. The caller has already
+    decided the fields -- an assignee who left is nobody, the active sprint
+    or the backlog -- and a schedule has no values for the team's own fields,
+    so a required one is left empty, as an import leaves it (#117), and a
+    column's limit does not hold it back, as it does not an import (#270):
+    work that comes back on a date arrives on the date.
+    """
+    ticket = _insert_ticket(session, team, payload, creator=creator, actor=None)
+    session.add(
+        TicketEvent(
+            ticket_id=ticket.id,
+            team_id=ticket.team_id,
+            field=TicketEventField.schedule,
+            new_value=name,
+            actor_id=None,
+            created_at=ticket.created_at,
+        )
+    )
+    _announce_creation(session, ticket, payload, None, {})
+    return ticket
+
+
+def _insert_ticket(
+    session: Session,
+    team: Team,
+    payload: TicketCreate,
+    creator: User,
+    actor: Optional[User],
+) -> Ticket:
+    """Number the ticket, write it and its opening history, and commit."""
+    team_id = team.id
     number = team.next_ticket_number
     team.next_ticket_number = number + 1
     session.add(team)
@@ -293,31 +348,38 @@ def create_ticket(
         due_date=payload.due_date,
         # On top of its column, where a new card is looked for.
         rank=top_rank(session, team_id),
-        creator_id=current_user.id,
+        creator_id=creator.id,
     )
 
     if payload.parent_id is not None:
         ticket.parent_id = validate_parent(session, ticket, payload.parent_id).id
-    # A new ticket is new work in its column too (#270).
-    wip.require_room(session, team_id, ticket.status_id, [(None, ticket.parent_id)])
+    # A new ticket is new work in its column too (#270) -- when somebody
+    # files it; see `create_scheduled` for the one that arrives on a date.
+    if actor is not None:
+        wip.require_room(session, team_id, ticket.status_id, [(None, ticket.parent_id)])
 
     session.add(ticket)
     session.commit()
     session.refresh(ticket)
+    record_creation(session, ticket, actor)
+    return ticket
 
-    applied = custom_fields_service.write(
-        session, ticket, field_changes, current_user, record=False
-    )
-    record_creation(session, ticket, current_user)
-    notifications_service.on_ticket_created(
-        session, ticket, current_user, named=applied.named
-    )
+
+def _announce_creation(
+    session: Session,
+    ticket: Ticket,
+    payload: TicketCreate,
+    actor: Optional[User],
+    named: dict,
+) -> TicketRead:
+    """Tell the people, the webhooks and the rules about a new ticket."""
+    notifications_service.on_ticket_created(session, ticket, actor, named=named)
     outbound.emit(
         session,
         ticket.team_id,
         WebhookEvent.ticket_created,
         lambda: {"ticket": ticket_to_read(ticket, session)},
-        current_user,
+        actor,
     )
     session.commit()
 
@@ -329,7 +391,7 @@ def create_ticket(
     # match on a label, and one that fired before the labels were attached
     # would be reading a ticket that does not exist yet as far as the person
     # filing it is concerned.
-    rules_service.on_ticket_created(session, ticket, current_user)
+    rules_service.on_ticket_created(session, ticket, actor)
     session.commit()
     session.refresh(ticket)
 
@@ -340,19 +402,11 @@ def list_tickets(
     session: Session,
     current_user: User,
     team_id: int,
-    project_id: Optional[int] = None,
-    status_id: Optional[int] = None,
-    priority: Optional[TicketPriority] = None,
-    assignee_id: Optional[int] = None,
-    unassigned: bool = False,
-    label_id: Optional[int] = None,
+    filters: Optional[ViewFilters] = None,
     parent_id: Optional[int] = None,
-    sprint_id: Optional[int] = None,
-    due: Optional[DueFilter] = None,
     today: Optional[date] = None,
     due_from: Optional[date] = None,
     due_to: Optional[date] = None,
-    type: Optional[TicketType] = None,
     resolved: Optional[bool] = None,
     sort: TicketSort = TicketSort.created,
     direction: SortDirection = SortDirection.desc,
@@ -367,40 +421,26 @@ def list_tickets(
     fifty most recent", which is a different and much less useful thing, and
     silently so.
     """
-    filters = _build_ticket_filters(
-        session,
-        current_user,
-        team_id,
-        project_id=project_id,
-        status_id=status_id,
-        priority=priority,
-        assignee_id=assignee_id,
-        unassigned=unassigned,
-        label_id=label_id,
-        parent_id=parent_id,
-        sprint_id=sprint_id,
+    clauses = _build_ticket_filters(
+        session, current_user, team_id, filters, parent_id=parent_id, today=today
     )
-    if type is not None:
-        filters.append(Ticket.type == type)
     if resolved is not None:
         done_or_cancelled = in_category(*RESOLVED)
-        filters.append(done_or_cancelled if resolved else ~done_or_cancelled)
-    if due is not None:
-        filters.append(due_clause(due, today or datetime.now(timezone.utc).date()))
+        clauses.append(done_or_cancelled if resolved else ~done_or_cancelled)
     # A date range, both ends inclusive (#105): the calendar asks for the days
     # its grid shows. Either end alone is an open range.
     if due_from is not None:
-        filters.append(Ticket.due_date >= due_from)
+        clauses.append(Ticket.due_date >= due_from)
     if due_to is not None:
-        filters.append(Ticket.due_date <= due_to)
+        clauses.append(Ticket.due_date <= due_to)
 
     # `total` counts everything matching the filters, not the page, so the UI
     # can show "50 of 1,204" without a second request.
-    total = session.exec(select(func.count()).select_from(Ticket).where(*filters)).one()
+    total = session.exec(select(func.count()).select_from(Ticket).where(*clauses)).one()
 
     tickets = session.exec(
         select(Ticket)
-        .where(*filters)
+        .where(*clauses)
         .order_by(*_ordering(sort, direction, rank_order(session)))
         .offset(offset)
         .limit(limit)
@@ -418,14 +458,9 @@ def _build_ticket_filters(
     session: Session,
     current_user: User,
     team_id: int,
-    project_id: Optional[int] = None,
-    status_id: Optional[int] = None,
-    priority: Optional[TicketPriority] = None,
-    assignee_id: Optional[int] = None,
-    unassigned: bool = False,
-    label_id: Optional[int] = None,
+    filters: Optional[ViewFilters] = None,
     parent_id: Optional[int] = None,
-    sprint_id: Optional[int] = None,
+    today: Optional[date] = None,
 ) -> list[ColumnElement[bool]]:
     """The WHERE clauses for a team's ticket list, after checking who is asking.
 
@@ -439,59 +474,37 @@ def _build_ticket_filters(
     require_team_member(team_id, current_user, session)
     return ticket_clauses(
         team_id,
-        project_id=project_id,
-        status_id=status_id,
-        priority=priority,
-        assignee_id=assignee_id,
-        unassigned=unassigned,
-        label_id=label_id,
+        filters,
         parent_id=parent_id,
-        sprint_id=sprint_id,
+        today=today,
+        viewer_id=current_user.id,
     )
 
 
 def ticket_clauses(
     team_id: int,
-    project_id: Optional[int] = None,
-    status_id: Optional[int] = None,
-    priority: Optional[TicketPriority] = None,
-    assignee_id: Optional[int] = None,
-    unassigned: bool = False,
-    label_id: Optional[int] = None,
+    filters: Optional[ViewFilters] = None,
     parent_id: Optional[int] = None,
-    sprint_id: Optional[int] = None,
+    today: Optional[date] = None,
+    viewer_id: Optional[int] = None,
 ) -> list[ColumnElement[bool]]:
     """The WHERE clauses alone, with nobody asking: `_build_ticket_filters`
-    after its checks, and a share link (#245), whose reader has no account."""
-    filters: list[ColumnElement[bool]] = [Ticket.team_id == team_id]
-    if project_id is not None:
-        filters.append(Ticket.project_id == project_id)
-    if status_id is not None:
-        filters.append(Ticket.status_id == status_id)
-    if priority is not None:
-        filters.append(Ticket.priority == priority)
-    if unassigned:
-        # Distinct from leaving assignee_id null, which means "anybody".
-        filters.append(Ticket.assignee_id == None)  # noqa: E711 -- SQL IS NULL
-    elif assignee_id is not None:
-        filters.append(Ticket.assignee_id == assignee_id)
-    if label_id is not None:
-        # A subquery rather than a join: a ticket joined to its label links
-        # would come back once per matching link, so `list_tickets` would count
-        # it that many times and the export would repeat the row.
-        filters.append(
-            Ticket.id.in_(
-                select(TicketLabelLink.ticket_id).where(
-                    TicketLabelLink.label_id == label_id
-                )
+    after its checks, and a share link (#245), whose reader has no account.
+
+    `today` is the caller's own date, which a due filter and the updated and
+    created windows are measured from; UTC's today when it does not say.
+    `viewer_id` is who "me" and "watching" mean (#261).
+    """
+    clauses: list[ColumnElement[bool]] = [Ticket.team_id == team_id]
+    if filters is not None:
+        clauses.extend(
+            filter_clauses(
+                filters, today or datetime.now(timezone.utc).date(), viewer_id
             )
         )
     if parent_id is not None:
-        filters.append(Ticket.parent_id == parent_id)
-    if sprint_id is not None:
-        filters.append(Ticket.sprint_id == sprint_id)
-
-    return filters
+        clauses.append(Ticket.parent_id == parent_id)
+    return clauses
 
 
 #: How many tickets an export reads, expands and hands over at a time.
@@ -518,20 +531,18 @@ class TicketExportRow(NamedTuple):
     ticket: TicketRead
     project_name: str
     sprint_name: str
+    #: Time logged on it, and what is left (#268) -- worked out, or as set.
+    logged_minutes: int = 0
+    remaining_minutes: Optional[int] = None
 
 
 def export_tickets(
     session: Session,
     current_user: User,
     team_id: int,
-    project_id: Optional[int] = None,
-    status_id: Optional[int] = None,
-    priority: Optional[TicketPriority] = None,
-    assignee_id: Optional[int] = None,
-    unassigned: bool = False,
-    label_id: Optional[int] = None,
+    filters: Optional[ViewFilters] = None,
     parent_id: Optional[int] = None,
-    sprint_id: Optional[int] = None,
+    today: Optional[date] = None,
 ) -> Iterator[list[TicketExportRow]]:
     """Every ticket matching the filters, newest number first, in batches.
 
@@ -542,20 +553,10 @@ def export_tickets(
     lazy, because the caller is a streaming response: see
     `_export_batches` for why it opens a session of its own.
     """
-    filters = _build_ticket_filters(
-        session,
-        current_user,
-        team_id,
-        project_id=project_id,
-        status_id=status_id,
-        priority=priority,
-        assignee_id=assignee_id,
-        unassigned=unassigned,
-        label_id=label_id,
-        parent_id=parent_id,
-        sprint_id=sprint_id,
+    clauses = _build_ticket_filters(
+        session, current_user, team_id, filters, parent_id=parent_id, today=today
     )
-    return _export_batches(filters, session.get_bind(), outside.confined_to(session))
+    return _export_batches(clauses, session.get_bind(), outside.confined_to(session))
 
 
 def _export_batches(
@@ -632,16 +633,31 @@ def _export_rows(tickets: list[Ticket], session: Session) -> list[TicketExportRo
         ).all()
     }
 
-    return [
-        TicketExportRow(
-            ticket=read,
-            # `.get` rather than an `is None` check: a ticket with no project
-            # and one pointing at a deleted row both mean "no name to print".
-            project_name=project_names.get(read.project_id, ""),
-            sprint_name=sprint_names.get(read.sprint_id, ""),
+    # Imported here: time_estimates reads tickets through this module.
+    from lib_softtrack.time_estimates import logged_by, remaining_of
+
+    logged = logged_by(session, [ticket.id for ticket in tickets])
+    rows = []
+    for read in _expand_tickets(tickets, session):
+        spent = logged.get(read.id, 0)
+        rows.append(
+            TicketExportRow(
+                ticket=read,
+                # `.get` rather than an `is None` check: a ticket with no
+                # project and one pointing at a deleted row both mean "no
+                # name to print".
+                project_name=project_names.get(read.project_id, ""),
+                sprint_name=sprint_names.get(read.sprint_id, ""),
+                logged_minutes=spent,
+                remaining_minutes=remaining_of(
+                    read.time_estimate_minutes,
+                    read.remaining_minutes,
+                    spent,
+                    read.status.category in RESOLVED,
+                ),
+            )
         )
-        for read in _expand_tickets(tickets, session)
-    ]
+    return rows
 
 
 def _readable(session: Session, current_user: User, ticket: Optional[Ticket]) -> Ticket:
@@ -866,19 +882,6 @@ def _ordering(sort: TicketSort, direction: SortDirection, rank) -> list:
     return [key.desc() if descending else key.asc(), newest_first]
 
 
-def due_clause(due: DueFilter, today: date):
-    """One of the three due-date questions, as a condition on Ticket (#87)."""
-    if due == DueFilter.none:
-        return Ticket.due_date == None  # noqa: E711 -- SQL IS NULL
-    if due == DueFilter.overdue:
-        # Late only while it is still open: finished work is not overdue,
-        # however late it was finished.
-        return (Ticket.due_date < today) & ~in_category(*RESOLVED)
-    # Monday is 0, so this is the coming Sunday -- or today, on a Sunday.
-    end_of_week = today + timedelta(days=6 - today.weekday())
-    return (Ticket.due_date >= today) & (Ticket.due_date <= end_of_week)
-
-
 def move_ticket(
     session: Session, current_user: User, ticket_id: int, payload: TicketMove
 ) -> TicketRead:
@@ -961,6 +964,13 @@ def _delete_rows(session: Session, ticket: Ticket) -> list[str]:
         select(SprintAction).where(SprintAction.ticket_id == ticket_id)
     ).all():
         session.delete(action)
+    # And the schedule that made it (#264) forgets which ticket it was, but
+    # not that the day was done: the claim stays, so it is not made again.
+    for run in session.exec(
+        select(ScheduleRun).where(ScheduleRun.ticket_id == ticket_id)
+    ).all():
+        run.ticket_id = None
+        session.add(run)
     session.flush()
 
     # Attachments before comments: a comment attachment holds a foreign key to

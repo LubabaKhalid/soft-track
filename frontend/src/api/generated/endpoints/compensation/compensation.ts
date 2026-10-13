@@ -54,9 +54,10 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
 };
 
 /**
- * Everybody active and what they are paid today, with totals per currency
- * and pay schedule over everybody the filters match. People with nothing in
- * effect come last, and are counted in `missing`.
+ * Everybody on payroll (#320) and what they are paid today, with totals
+ * per currency and pay schedule over everybody the filters match. People
+ * with nothing in effect come last, and are counted in `missing`; the
+ * accounts that are not on payroll are counted and named beside them.
  * @summary List Compensation
  */
 export const listCompensationFinanceCompensationGet = (

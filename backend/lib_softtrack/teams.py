@@ -8,7 +8,9 @@ from lib_identity.models.identity import UserPublic
 from lib_softtrack import outside
 from lib_softtrack.models.teams import (
     EpicRef,
+    MyJoinRequest,
     TeamCreate,
+    TeamDirectory,
     TeamDirectoryEntry,
     TeamMemberAdd,
     TeamMemberRead,
@@ -29,6 +31,7 @@ from lib_softtrack.tables import (
     SprintAction,
     Ticket,
     TicketEvent,
+    TicketSchedule,
     TicketTemplate,
     OutboundWebhook,
     UserDefaultView,
@@ -40,6 +43,7 @@ from lib_softtrack.tables import (
     ShareLink,
     Team,
     TeamInvite,
+    TeamJoinRequest,
     TeamMember,
     TeamRole,
     User,
@@ -229,6 +233,12 @@ _TEAM_OWNED_BY_PATH = (
     ),
     ("field_id", CustomField, ErrorCode.custom_field_not_found, "Field not found"),
     (
+        "schedule_id",
+        TicketSchedule,
+        ErrorCode.schedule_not_found,
+        "Schedule not found",
+    ),
+    (
         "share_link_id",
         ShareLink,
         ErrorCode.share_link_not_found,
@@ -356,18 +366,43 @@ def list_teams_for_user(session: Session, current_user: User) -> list[Team]:
     return session.exec(statement).all()
 
 
-def team_directory(session: Session) -> list[TeamDirectoryEntry]:
-    """Every team on the instance, with how many are on it and who runs it.
+def team_directory(session: Session, user: User) -> TeamDirectory:
+    """The teams there are, with how many are on each and who runs it.
 
-    For somebody on no team (#318), who needs to know whom to ask to be added.
-    The same kind of thing the people directory already shows anybody signed
-    in: names and people, not work. Three queries however many teams there
-    are. Deactivated accounts are left out of both the count and the admins,
-    since neither can add anybody.
+    First for somebody on no team (#318), who needs to know whom to ask; then
+    for anybody finding a team and asking to join it (#259). The same kind
+    of thing the people directory already shows anybody signed in: names and
+    people, not work. Deactivated accounts are left out of both the count and
+    the admins, since neither can add anybody.
+
+    A team that keeps itself off the list is left out, unless you are on it
+    or have asked to join it, and counted instead. An archived team (#307) is
+    neither shown nor counted: there is nothing to join.
     """
+    from lib_softtrack.joining import prune_expired
+
+    prune_expired(session)
+    mine = dict(
+        session.exec(
+            select(TeamMember.team_id, TeamMember.role).where(
+                TeamMember.user_id == user.id
+            )
+        ).all()
+    )
+    asked = {
+        request.team_id: request
+        for request in session.exec(
+            select(TeamJoinRequest).where(TeamJoinRequest.requester_id == user.id)
+        ).all()
+    }
     teams = session.exec(
-        select(Team).where(Team.archived == False).order_by(func.lower(Team.name))
+        select(Team)
+        .where(Team.archived_at == None)  # noqa: E711 -- SQL comparison
+        .where(Team.archived == False)  # noqa: E712 -- SQL comparison
+        .order_by(func.lower(Team.name))
     ).all()
+    shown = [t for t in teams if t.listed or t.id in mine or t.id in asked]
+
     counts = dict(
         session.exec(
             select(TeamMember.team_id, func.count())
@@ -377,7 +412,7 @@ def team_directory(session: Session) -> list[TeamDirectoryEntry]:
         ).all()
     )
     admins: dict[int, list[UserPublic]] = {}
-    for team_id, user in session.exec(
+    for team_id, admin in session.exec(
         select(TeamMember.team_id, User)
         .join(User, User.id == TeamMember.user_id)
         .where(
@@ -386,18 +421,28 @@ def team_directory(session: Session) -> list[TeamDirectoryEntry]:
         )
         .order_by(TeamMember.joined_at)
     ).all():
-        admins.setdefault(team_id, []).append(UserPublic.model_validate(user))
-    return [
-        TeamDirectoryEntry(
-            id=team.id,
-            name=team.name,
-            key=team.key,
-            description=team.description,
-            member_count=counts.get(team.id, 0),
-            admins=admins.get(team.id, []),
-        )
-        for team in teams
-    ]
+        admins.setdefault(team_id, []).append(UserPublic.model_validate(admin))
+    return TeamDirectory(
+        teams=[
+            TeamDirectoryEntry(
+                id=team.id,
+                name=team.name,
+                key=team.key,
+                description=team.description,
+                member_count=counts.get(team.id, 0),
+                admins=admins.get(team.id, []),
+                open_to_join=team.open_to_join,
+                my_role=mine.get(team.id),
+                my_request=(
+                    MyJoinRequest.model_validate(asked[team.id])
+                    if team.id in asked and team.id not in mine
+                    else None
+                ),
+            )
+            for team in shown
+        ],
+        unlisted_count=len(teams) - len(shown),
+    )
 
 
 def get_team(session: Session, current_user: User, team_id: int) -> Team:
@@ -526,6 +571,16 @@ def update_team(
         team.wip_limits_hard = payload.wip_limits_hard
     if payload.wip_counts_subtickets is not None:
         team.wip_counts_subtickets = payload.wip_counts_subtickets
+    if payload.estimate_unit is not None:
+        team.estimate_unit = payload.estimate_unit
+    if payload.capacity_points is not None:
+        team.capacity_points = payload.capacity_points
+    if payload.capacity_minutes_per_day is not None:
+        team.capacity_minutes_per_day = payload.capacity_minutes_per_day
+    if payload.listed is not None:
+        team.listed = payload.listed
+    if payload.open_to_join is not None:
+        team.open_to_join = payload.open_to_join
     if payload.archived is not None:
         team.archived = payload.archived
 
@@ -547,7 +602,12 @@ def list_team_members(
 ) -> list[TeamMemberRead]:
     get_team_or_404(team_id, session)
     require_team_member(team_id, current_user, session)
+    return list_members_of(session, team_id)
 
+
+def list_members_of(session: Session, team_id: int) -> list[TeamMemberRead]:
+    """A team's roster, unguarded: the caller has decided who may read it --
+    a member, or a site admin choosing the team's next admin (#307)."""
     # One join rather than a session.get per row: a roster is read on every
     # board load, and the per-row version made it N+1 queries deep.
     rows = session.exec(
@@ -635,6 +695,10 @@ def add_team_member(
     session.add(membership)
     if user.is_external:
         outside.set_epics(session, team_id, user.id, epic_ids)
+    # Added by hand: a request of theirs to join has nothing left to ask (#259).
+    from lib_softtrack.joining import forget
+
+    forget(session, team_id, user.id)
     session.commit()
     session.refresh(membership)
 

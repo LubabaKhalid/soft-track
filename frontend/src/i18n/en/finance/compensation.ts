@@ -1,8 +1,7 @@
 /** Finance → Compensation (#131): what everybody is paid, as a history. */
 export const compensation = {
   title: 'Compensation',
-  intro:
-    'Gross agreed pay per person, as a history. The current figure is the latest record that has taken effect. Finance admins only.',
+  intro: 'Everybody on payroll, with what they are paid today.',
   recordPay: 'Record pay',
   loading: 'Loading pay…',
   searchLabel: 'Search people',
@@ -45,6 +44,19 @@ export const compensation = {
   totalsHint: 'Per currency and schedule. Nothing is converted, and nothing is annualised.',
   missing_one: '{{count}} person has no pay in effect.',
   missing_other: '{{count}} people have no pay in effect.',
+  /** Under the list (#320): "11 people on payroll · 2 accounts are not: …". */
+  onPayroll_one: '{{count}} person on payroll',
+  onPayroll_other: '{{count}} people on payroll',
+  notOnPayroll_one: '{{count}} account is not: {{names}}',
+  notOnPayroll_other: '{{count}} accounts are not: {{names}}',
+  /** Which other employment types finance puts on payroll (#320). */
+  alsoOnPayroll: 'Also on payroll:',
+  payrollTypes: {
+    contractor: 'Contractors',
+    intern: 'Interns',
+    service_account: 'Service accounts',
+  },
+  payrollTypesFailed: 'Could not change who is on payroll. Try again.',
   showing: 'Showing {{from}}–{{to}} of {{total}}',
   previous: 'Previous',
   next: 'Next',

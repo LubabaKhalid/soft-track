@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer
 
 from lib_identity.models.departments import DepartmentRef
+from lib_softtrack.tables import EmploymentType
 from lib_utils.viewer import outside_viewer
 
 
@@ -35,6 +36,10 @@ class UserPublic(BaseModel):
     #: From outside the organisation (#243): marked "External" wherever the
     #: name appears, so nobody writes in front of a client without knowing.
     is_external: bool = False
+    #: False for an account a site admin created whose owner has not chosen a
+    #: password yet (#303): marked "not yet activated" in the pickers, and
+    #: still assignable and mentionable.
+    is_activated: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,6 +88,8 @@ class UserMe(UserPublic):
     #: password that does not exist.
     has_password: bool
     created_at: datetime
+    #: What kind of account or engagement this is (#320).
+    employment_type: Optional[EmploymentType] = None
     #: What the organisation knows about them (#122). Null until somebody
     #: fills it in. Title and location are theirs to edit; the start date is
     #: set by a site admin.

@@ -23,7 +23,7 @@ import { RecordPayDialog } from '@/finance/RecordPayDialog'
 import { StateSteps } from '@/finance/StateSteps'
 import { useCurrencies } from '@/finance/useCurrencies'
 import { Trans, userText, useTranslation } from '@/i18n'
-import { formatDate, formatList } from '@/i18n/format'
+import { formatClauseList, formatDate, formatList } from '@/i18n/format'
 import { Avatar } from '@/ui/Avatar'
 import { Icon } from '@/ui/Icon'
 import { Loading } from '@/ui/Loading'
@@ -243,6 +243,31 @@ export default function PayrollRunPage() {
               totals={data.reimbursement_totals}
               label={t('payroll.run.reimbursedTotalsLabel')}
             />
+          </div>
+        )}
+        {draft && data.left_off.length > 0 && (
+          <div className="mt-3 flex items-start gap-2 rounded-control border border-neutral-900/10 bg-neutral-900/5 px-3 py-2.5 text-sm text-neutral-700">
+            <Icon name="users" size={15} className="mt-0.5 shrink-0 text-neutral-500" />
+            <p>
+              <Trans
+                t={t}
+                i18nKey="payroll.run.leftOff"
+                count={data.left_off.length}
+                values={{
+                  count: data.left_off.length,
+                  names: formatClauseList(
+                    data.left_off.map((account) =>
+                      t('payroll.run.leftOffAccount', {
+                        name: account.name,
+                        reason: t(`payroll.run.leftOffReasons.${account.reason}`),
+                      }),
+                    ),
+                  ),
+                }}
+                components={{ strong: <strong className="font-semibold text-neutral-900" /> }}
+                {...userText}
+              />
+            </p>
           </div>
         )}
         {draft && <p className="mt-3 text-xs text-neutral-400">{t('payroll.run.liveHint')}</p>}

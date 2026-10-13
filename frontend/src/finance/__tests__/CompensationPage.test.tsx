@@ -19,6 +19,8 @@ import { financePerson, payRecord, payRow } from '@/finance/__tests__/fixtures'
 const mocks = vi.hoisted(() => ({
   page: undefined as unknown,
   calls: [] as unknown[],
+  types: [] as string[],
+  setTypes: { mutateAsync: vi.fn(), isPending: false },
 }))
 
 vi.mock('@/api/generated/endpoints/compensation/compensation', async (importOriginal) => ({
@@ -29,6 +31,12 @@ vi.mock('@/api/generated/endpoints/compensation/compensation', async (importOrig
     mocks.calls.push(params)
     return { isPending: false, data: mocks.page }
   },
+}))
+
+vi.mock('@/api/generated/endpoints/payroll/payroll', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/generated/endpoints/payroll/payroll')>()),
+  useGetPayrollTypesFinancePayrollTypesGet: () => ({ data: { types: mocks.types } }),
+  useSetPayrollTypesFinancePayrollTypesPut: () => mocks.setTypes,
 }))
 
 vi.mock('@/api/generated/endpoints/currencies/currencies', async (importOriginal) => ({
@@ -50,7 +58,17 @@ vi.mock('@/api/generated/endpoints/departments/departments', async (importOrigin
 const ENGINEERING = { id: 1, name: 'Engineering' }
 
 function renderWith(page: Partial<Page>) {
-  mocks.page = { items: [], total: 0, limit: 50, offset: 0, totals: [], missing: 0, ...page }
+  mocks.page = {
+    items: [],
+    total: 0,
+    limit: 50,
+    offset: 0,
+    totals: [],
+    missing: 0,
+    on_payroll: 0,
+    not_on_payroll: [],
+    ...page,
+  }
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter>
@@ -63,6 +81,8 @@ function renderWith(page: Partial<Page>) {
 
 beforeEach(() => {
   mocks.calls = []
+  mocks.types = []
+  mocks.setTypes.mutateAsync.mockReset().mockResolvedValue({ types: [] })
 })
 
 afterEach(() => {
@@ -178,5 +198,37 @@ describe('The compensation list', () => {
     expect(
       (within(dialog).getByRole('button', { name: 'Record' }) as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+})
+
+describe('Who is on payroll (#320)', () => {
+  it('counts the people on payroll and names the accounts that are not', () => {
+    renderWith({
+      on_payroll: 11,
+      not_on_payroll: [
+        { id: 8, name: 'Carlos Rivera', reason: 'external' },
+        { id: 9, name: 'Demo User', reason: 'service_account' },
+      ],
+    })
+    expect(screen.getByText(/people on payroll/).textContent).toBe(
+      '11 people on payroll · 2 accounts are not: Carlos Rivera, Demo User',
+    )
+    expect(screen.getByText('Everybody on payroll, with what they are paid today.')).toBeTruthy()
+  })
+
+  it('lets finance put another employment type on payroll', async () => {
+    mocks.types = ['intern']
+    const user = renderWith({ on_payroll: 4 })
+    expect(screen.getByText('4 people on payroll').textContent).toBe('4 people on payroll')
+    const interns = screen.getByRole('checkbox', { name: 'Interns' }) as HTMLInputElement
+    expect(interns.checked).toBe(true)
+    expect(screen.queryByRole('checkbox', { name: /External/ })).toBeNull()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Contractors' }))
+    expect(mocks.setTypes.mutateAsync).toHaveBeenCalledWith({
+      data: { types: ['intern', 'contractor'] },
+    })
+    await user.click(interns)
+    expect(mocks.setTypes.mutateAsync).toHaveBeenLastCalledWith({ data: { types: [] } })
   })
 })

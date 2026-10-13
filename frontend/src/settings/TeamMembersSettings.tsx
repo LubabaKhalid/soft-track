@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
   useCreateInviteTeamsTeamIdInvitesPost,
@@ -22,6 +22,7 @@ import { Trans, userText, useTranslation } from '@/i18n'
 import { formatRelative } from '@/i18n/format'
 import { EpicPicker, EpicScope } from '@/settings/EpicPicker'
 import { type HandOver, HandOverDialog } from '@/settings/HandOverDialog'
+import { JoinRequests } from '@/settings/JoinRequests'
 import { DeactivatedChip, RoleChip } from '@/settings/RoleChip'
 import { ROLE_HINTS, ROLE_LABELS } from '@/settings/roles'
 import { copyInviteLink, inviteUrl } from '@/settings/inviteLink'
@@ -284,6 +285,14 @@ export default function TeamMembersSettings() {
                 </span>
               </span>
             </label>
+            {/* Many addresses, several teams, one trip (#304). */}
+            <Link
+              to={`/settings/teams/${team.key}/members/invite`}
+              className="btn btn-ghost btn-sm"
+            >
+              <Icon name="users" size={14} />
+              {t('inviteMany.open')}
+            </Link>
             {inviteOutside && (
               <div className="well w-full rounded-control p-3">
                 <p className="mb-2 text-xs font-medium text-neutral-500">
@@ -332,6 +341,9 @@ export default function TeamMembersSettings() {
           </div>
         )}
       </div>
+
+      {/* People asking to join (#259), first: they are waiting on an answer. */}
+      {isAdmin && <JoinRequests teamId={team.id} />}
 
       <section className="glass-strong rounded-panel p-6">
         <p className="eyebrow mb-3">

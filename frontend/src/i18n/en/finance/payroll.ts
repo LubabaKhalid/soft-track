@@ -55,6 +55,19 @@ export const payroll = {
       '<strong>{{count}} person has no compensation for this period</strong> and is on the run as missing, not skipped: {{names}}.',
     missing_other:
       '<strong>{{count}} people have no compensation for this period</strong> and are on the run as missing, not skipped: {{names}}.',
+    leftOff_one:
+      '<strong>{{count}} account is not on payroll</strong> and is left off this run: {{names}}.',
+    leftOff_other:
+      '<strong>{{count}} accounts are not on payroll</strong> and are left off this run: {{names}}.',
+    /** One account in that sentence: "Demo User, a service account". */
+    leftOffAccount: '{{name}}, {{reason}}',
+    leftOffReasons: {
+      external: 'external',
+      contractor: 'a contractor',
+      intern: 'an intern',
+      service_account: 'a service account',
+      employee: 'an employee',
+    },
     approvedBy:
       'Approved by <strong>{{name}}</strong> on {{date}}. Amounts are copied onto the lines: a raise recorded next week cannot change what this run says was paid.',
     paidBy:

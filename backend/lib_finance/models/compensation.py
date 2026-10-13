@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 from lib_finance.models.money import FinancePerson
 from lib_finance.money import MAX_AMOUNT_MINOR, Currency
 from lib_identity.models.identity import PersonRef
-from lib_softtrack.tables import CompensationKind, PaySchedule
+from lib_softtrack.tables import CompensationKind, EmploymentType, PaySchedule
 
 #: Room for "Agreed in the September review, backdated to the promotion".
 COMPENSATION_NOTE_MAX = 500
@@ -69,6 +69,15 @@ class CompensationTotal(BaseModel):
     people: int
 
 
+class NotOnPayroll(BaseModel):
+    """An active account that is not on payroll (#320), and why: its
+    employment type, or `external` for an account from outside."""
+
+    id: int
+    name: str
+    reason: EmploymentType
+
+
 class CompensationPage(BaseModel):
     items: list[CompensationRow]
     total: int
@@ -79,6 +88,10 @@ class CompensationPage(BaseModel):
     #: How many of them have no pay in effect: what a payroll run (#132)
     #: will list as missing.
     missing: int
+    #: Everybody on payroll today, whatever the filters (#320).
+    on_payroll: int
+    #: The active accounts that are not, by name, whatever the filters.
+    not_on_payroll: list[NotOnPayroll]
 
 
 class CompensationHistory(BaseModel):

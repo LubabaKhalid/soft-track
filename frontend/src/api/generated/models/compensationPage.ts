@@ -7,6 +7,7 @@
  */
 import type { CompensationRow } from './compensationRow';
 import type { CompensationTotal } from './compensationTotal';
+import type { NotOnPayroll } from './notOnPayroll';
 
 export interface CompensationPage {
   items: CompensationRow[];
@@ -15,4 +16,6 @@ export interface CompensationPage {
   offset: number;
   totals: CompensationTotal[];
   missing: number;
+  on_payroll: number;
+  not_on_payroll: NotOnPayroll[];
 }

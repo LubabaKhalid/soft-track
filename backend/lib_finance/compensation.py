@@ -24,8 +24,9 @@ from typing import Iterable, Optional
 from sqlalchemy import case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, col, func, or_, select
+from sqlmodel import Session, and_, col, func, not_, or_, select
 
+from lib_finance import payroll_types
 from lib_finance.models.compensation import (
     CompensationCreate,
     CompensationHistory,
@@ -34,6 +35,7 @@ from lib_finance.models.compensation import (
     CompensationRow,
     CompensationStanding,
     CompensationTotal,
+    NotOnPayroll,
 )
 from lib_finance.models.money import FinancePerson
 from lib_finance.money import Currency
@@ -80,6 +82,53 @@ def in_effect(day: date):
         .subquery()
     )
     return select(ranked.c.id).where(ranked.c.rank == 1)
+
+
+def _on_payroll_if_active(session: Session, day: date):
+    """On payroll, before asking whether the account is active: of a type
+    that is on it, or paid on `day` -- and never from outside (#320)."""
+    paid = col(User.id).in_(
+        select(Compensation.user_id).where(col(Compensation.id).in_(in_effect(day)))
+    )
+    return or_(
+        payroll_types.on_payroll_by_type(session),
+        and_(payroll_types.inside(), paid),
+    )
+
+
+def on_payroll(session: Session, day: date):
+    """Who is on payroll on `day` (#320), as a filter on `User`.
+
+    An active account inside the organisation whose employment type is on
+    payroll -- none, employee, or a type finance switched on -- or that has
+    pay in effect. A draft run takes these, on its schedule; the Compensation
+    list takes these; and nobody else is either.
+    """
+    return and_(
+        User.is_active == True,  # noqa: E712 -- SQL comparison
+        _on_payroll_if_active(session, day),
+    )
+
+
+def not_on_payroll(session: Session, day: date) -> list[NotOnPayroll]:
+    """The active accounts that are not on payroll on `day`, by name, each
+    with the type that keeps it off."""
+    rows = session.exec(
+        select(User.id, User.full_name, User.is_external, User.employment_type)
+        .where(
+            User.is_active == True,  # noqa: E712 -- SQL comparison
+            not_(_on_payroll_if_active(session, day)),
+        )
+        .order_by(func.lower(User.full_name), User.id)
+    ).all()
+    return [
+        NotOnPayroll(
+            id=user_id,
+            name=name,
+            reason=payroll_types.left_off_reason(is_external, kind),
+        )
+        for user_id, name, is_external, kind in rows
+    ]
 
 
 def pay_on(
@@ -179,13 +228,18 @@ def list_compensation(
     limit: int = DEFAULT_LIMIT,
     offset: int = 0,
 ) -> CompensationPage:
-    """Everybody active, with what they are paid on `day`.
+    """Everybody on payroll (#320), with what they are paid on `day`.
 
     People with nothing in effect come last and are counted in `missing`:
-    the ones a payroll run would otherwise quietly leave out.
+    the ones a payroll run would otherwise quietly leave out. The accounts
+    that are not on payroll are named beside the list, not in it.
     """
     effective = in_effect(day)
-    filters = [User.is_active == True]  # noqa: E712 -- SQL comparison
+    paid = col(User.id).in_(
+        select(Compensation.user_id).where(col(Compensation.id).in_(effective))
+    )
+    everybody = on_payroll(session, day)
+    filters = [everybody]
     if q and q.strip():
         needle = f"%{q.strip()}%"
         filters.append(
@@ -202,9 +256,6 @@ def list_compensation(
                 )
             )
         )
-    paid = col(User.id).in_(
-        select(Compensation.user_id).where(col(Compensation.id).in_(effective))
-    )
 
     total = session.exec(select(func.count()).select_from(User).where(*filters)).one()
     missing = session.exec(
@@ -265,6 +316,10 @@ def list_compensation(
         offset=offset,
         totals=totals,
         missing=missing,
+        on_payroll=session.exec(
+            select(func.count()).select_from(User).where(everybody)
+        ).one(),
+        not_on_payroll=not_on_payroll(session, day),
     )
 
 

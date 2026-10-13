@@ -42,6 +42,7 @@ TEAM_SCOPED = {
     "number",
     "emoji",
     "share_link_id",
+    "schedule_id",
 }
 
 #: What an account from outside may reach beyond its teams, and why. Anything
@@ -60,6 +61,9 @@ EXTERNAL_MAY = {
     ("POST", "/auth/me/tokens"): "their own API tokens",
     ("DELETE", "/auth/me/tokens/{token_id}"): "their own API tokens",
     ("POST", "/auth/me/sign-out-everywhere"): "their own sessions",
+    ("GET", "/auth/me/sessions"): "their own sessions",
+    ("DELETE", "/auth/me/sessions/{session_id}"): "their own sessions",
+    ("POST", "/auth/sign-out"): "their own session",
     ("GET", "/auth/me/invites"): "invitations addressed to them",
     ("POST", "/auth/oauth/exchange"): "signing in with Google or GitHub",
     ("POST", "/auth/oauth/{provider}/link-ticket"): "their own sign-in methods",
@@ -70,7 +74,11 @@ EXTERNAL_MAY = {
     ("POST", "/invites/{token}/accept"): "an invitation addressed to them",
     ("POST", "/invites/{token}/decline"): "an invitation addressed to them",
     ("GET", "/teams"): "the teams they are a guest of",
+    ("GET", "/teams/creation"): "that they may not create a team (#306)",
     ("GET", "/search"): "search, confined to their epics (#243)",
+    ("GET", "/me/work"): "their own work, confined to their epics (#258)",
+    ("GET", "/me/worklogs"): "their own time, confined to their epics (#267)",
+    ("GET", "/me/worklogs/export"): "their own time, confined to their epics (#267)",
     ("GET", "/notifications"): "their own notifications",
     ("GET", "/notifications/unread-count"): "their own notifications",
     ("GET", "/notifications/settings"): "their own notifications",

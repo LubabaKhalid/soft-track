@@ -1,7 +1,7 @@
 """add team archived flag
 
 Revision ID: b8b3a1c7d4e2
-Revises: c5ed33d77db4
+Revises: a9ae2c8b879d
 Create Date: 2026-10-02
 
 Every existing team is new and active by default, so the archive flag is backfilled to
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "b8b3a1c7d4e2"
-down_revision: Union[str, Sequence[str], None] = "c5ed33d77db4"
+down_revision: Union[str, Sequence[str], None] = "a9ae2c8b879d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

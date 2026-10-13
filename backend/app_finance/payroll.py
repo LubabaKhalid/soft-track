@@ -5,12 +5,14 @@ from fastapi import Depends, Query, Response
 from sqlmodel import Session
 
 from lib_finance import payroll as payroll_service
+from lib_finance import payroll_types
 from lib_finance.access import finance_router, require_finance_admin
 from lib_finance.models.payroll import (
     PayrollAdjustment,
     PayrollRunCreate,
     PayrollRunPage,
     PayrollRunRead,
+    PayrollTypes,
 )
 from lib_softtrack.models.page import DEFAULT_LIMIT, MAX_LIMIT
 from lib_softtrack.tables import User
@@ -18,6 +20,20 @@ from lib_utils.spreadsheet import BOM, safe_text
 from web import get_session
 
 router = finance_router(prefix="/finance/payroll/runs", tags=["payroll"])
+types_router = finance_router(prefix="/finance/payroll/types", tags=["payroll"])
+
+
+@types_router.get("", response_model=PayrollTypes)
+def get_payroll_types(session: Session = Depends(get_session)):
+    """The employment types on payroll besides employees (#320)."""
+    return PayrollTypes(types=payroll_types.switched_on(session))
+
+
+@types_router.put("", response_model=PayrollTypes)
+def set_payroll_types(payload: PayrollTypes, session: Session = Depends(get_session)):
+    """Put contractors, interns or service accounts on payroll, or take them
+    off. Drafts follow at once; approved runs do not change."""
+    return PayrollTypes(types=payroll_types.switch_on(session, payload.types))
 
 
 @router.get("", response_model=PayrollRunPage)

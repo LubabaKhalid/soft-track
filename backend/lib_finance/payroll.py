@@ -3,10 +3,12 @@
 A run is one period on one pay schedule. What it would pay is worked out
 while it is a draft and written down when it is approved:
 
-- **Draft.** Its lines are read live: everybody active whose pay in effect on
-  the period's last day is on this schedule, and everybody active with no pay
-  in effect at all -- listed as missing, never skipped, because a run that
-  quietly pays fewer people than work here is the worst kind of wrong. A pay
+- **Draft.** Its lines are read live: everybody on payroll (#320) whose pay
+  in effect on the period's last day is on this schedule, and everybody on
+  payroll with no pay in effect at all -- listed as missing, never skipped,
+  because a run that quietly pays fewer people than work here is the worst
+  kind of wrong. The active accounts that are not on payroll are named
+  beside the lines. A pay
   recorded, or an account opened, after the run was generated is on it; a
   line takes a one-off adjustment with a note.
 - **Approved.** Every line is written with its amount, currency, record and
@@ -30,7 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, func, select
 
-from lib_finance.compensation import pay_on
+from lib_finance.compensation import not_on_payroll, on_payroll, pay_on
 from lib_finance.models.money import FinancePerson
 from lib_finance.models.payroll import (
     PayrollAdjustment,
@@ -93,13 +95,10 @@ def _sorted(lines: list[_Line]) -> list[_Line]:
 
 
 def _draft_lines(session: Session, run: PayrollRun) -> list[_Line]:
+    # Who is on payroll (#320); the loop below keeps those on this schedule.
     people = session.exec(
         select(User)
-        .where(
-            User.is_active == True,  # noqa: E712 -- SQL comparison
-            # Off the books (#243): somebody from outside is nobody's payroll.
-            User.is_external == False,  # noqa: E712
-        )
+        .where(on_payroll(session, run.period_end))
         .options(selectinload(User.department))
     ).all()
     pay = pay_on(session, [person.id for person in people], run.period_end)
@@ -331,6 +330,12 @@ def _read(session: Session, run: PayrollRun) -> PayrollRunRead:
             )
             for line in lines
         ],
+        # Named on a draft only: an approved run's lines are what it paid.
+        left_off=(
+            not_on_payroll(session, run.period_end)
+            if run.state is PayrollRunState.draft
+            else []
+        ),
     )
 
 

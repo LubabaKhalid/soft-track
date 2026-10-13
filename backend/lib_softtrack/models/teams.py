@@ -4,7 +4,8 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from lib_identity.models.identity import UserPublic
-from lib_softtrack.tables import TeamRole
+from lib_softtrack.models.capacity import MAX_CAPACITY_POINTS
+from lib_softtrack.tables import EstimateUnit, TeamRole
 
 
 class TeamCreate(BaseModel):
@@ -28,6 +29,16 @@ class TeamRead(BaseModel):
     #: sub-tickets count against it.
     wip_limits_hard: bool = False
     wip_counts_subtickets: bool = True
+    #: What the team estimates in (#268): points, hours or both.
+    estimate_unit: EstimateUnit = EstimateUnit.points
+    #: What one person can take in a sprint, by default (#269): points for a
+    #: whole sprint, and minutes for each working day.
+    capacity_points: int = 10
+    capacity_minutes_per_day: int = 6 * 60
+    #: Who can find the team (#259): whether it is in the team directory, and
+    #: whether anybody signed in may join it without asking.
+    listed: bool = True
+    open_to_join: bool = False
     archived: bool = False
     created_at: datetime
 
@@ -53,6 +64,14 @@ class TeamUpdate(BaseModel):
     #: WIP limits (#270): refuse a move over one, and count sub-tickets.
     wip_limits_hard: Optional[bool] = None
     wip_counts_subtickets: Optional[bool] = None
+    #: Points, hours or both (#268). Points is the default.
+    estimate_unit: Optional[EstimateUnit] = None
+    #: The capacity each person starts from in a sprint (#269).
+    capacity_points: Optional[int] = Field(default=None, ge=0, le=MAX_CAPACITY_POINTS)
+    capacity_minutes_per_day: Optional[int] = Field(default=None, ge=0, le=24 * 60)
+    #: Who can find the team (#259). Listed is the default; open is not.
+    listed: Optional[bool] = None
+    open_to_join: Optional[bool] = None
     archived: Optional[bool] = None
 
 
@@ -85,10 +104,22 @@ class TeamMemberUpdate(BaseModel):
     epic_ids: Optional[list[int]] = None
 
 
-class TeamDirectoryEntry(BaseModel):
-    """A team as somebody who is not on it sees it (#318).
+class MyJoinRequest(BaseModel):
+    """Your own request to join a team (#259), as the directory shows it."""
 
-    Enough to know who to ask to be added: its name, its size and its admins.
+    id: int
+    note: Optional[str] = None
+    created_at: datetime
+    #: When it runs out, as an invitation sent at the same moment would.
+    expires_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TeamDirectoryEntry(BaseModel):
+    """A team as somebody who is not on it sees it (#318, #259).
+
+    Enough to know who to ask, and to ask: its name, its size and its admins.
     Nothing of its work -- no tickets, epics or sprints -- which still takes
     being on the team.
     """
@@ -101,6 +132,52 @@ class TeamDirectoryEntry(BaseModel):
     member_count: int
     #: Its active admins, longest-serving first.
     admins: list[UserPublic]
+    #: Anybody signed in joins it as a member without asking (#259).
+    open_to_join: bool = False
+    #: Your role on it, or null when you are not on it.
+    my_role: Optional[TeamRole] = None
+    #: Your request to join it still waiting, or null.
+    my_request: Optional[MyJoinRequest] = None
+
+
+class TeamDirectory(BaseModel):
+    """The teams there are (#259): every listed team, the ones you are on, and
+    the ones you have asked to join."""
+
+    teams: list[TeamDirectoryEntry]
+    #: How many teams in use keep themselves off the list, and are not yours.
+    unlisted_count: int
+
+
+#: Long enough for a sentence or two to the admins.
+JOIN_NOTE_MAX = 500
+
+
+class JoinRequestCreate(BaseModel):
+    #: To the team's admins, in your own words. Optional.
+    note: Optional[str] = Field(default=None, max_length=JOIN_NOTE_MAX)
+
+
+class JoinRequestApprove(BaseModel):
+    #: The role they join with. Somebody from outside the organisation is
+    #: only ever a guest.
+    role: TeamRole = TeamRole.member
+
+
+class JoinRequestRead(BaseModel):
+    """A request to join, as the team's admins see it (#259): who is asking,
+    with their title, department and manager beside it, so the admin knows
+    who they are."""
+
+    id: int
+    team_id: int
+    requester: UserPublic
+    job_title: Optional[str] = None
+    department: Optional[str] = None
+    manager: Optional[UserPublic] = None
+    note: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
 
 
 class TeamMemberRead(BaseModel):

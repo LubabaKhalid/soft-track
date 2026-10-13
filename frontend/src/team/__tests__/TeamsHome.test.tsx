@@ -24,9 +24,16 @@ const person = (id: number, full_name: string) => ({
 const mocks = vi.hoisted(() => ({
   user: { full_name: 'Yuki Tanaka', is_finance_admin: false },
   teams: [] as unknown[],
-  directory: [] as unknown[],
+  directory: { teams: [] as unknown[], unlisted_count: 0 },
   invites: [] as unknown[],
+  creation: { may_create: true, policy: 'anyone', site_admins: [], pending_requests: [] } as {
+    may_create: boolean
+    policy: string
+    site_admins: unknown[]
+    pending_requests: unknown[]
+  },
   logout: vi.fn(),
+  ask: vi.fn(),
 }))
 
 vi.mock('@/auth/useAuth', async (importOriginal) => ({
@@ -44,6 +51,8 @@ vi.mock('@/api/generated/endpoints/teams/teams', async (importOriginal) => ({
     isPending: false,
     isSuccess: true,
   }),
+  useTeamCreationAccessTeamsCreationGet: () => ({ data: mocks.creation, isSuccess: true }),
+  useRequestTeamTeamsRequestsPost: () => ({ mutateAsync: mocks.ask, isPending: false }),
 }))
 vi.mock('@/api/generated/endpoints/auth/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/generated/endpoints/auth/auth')>()),
@@ -59,6 +68,7 @@ function renderHome() {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route path="/" element={<TeamsHome />} />
+          <Route path="/my-work" element={<p>My work</p>} />
           <Route path="/:teamKey" element={<p>Board</p>} />
           <Route path="/new-team" element={<p>New team form</p>} />
           <Route path="/people" element={<p>Directory</p>} />
@@ -89,8 +99,9 @@ const SUPPORT = {
 beforeEach(() => {
   mocks.user = { full_name: 'Yuki Tanaka', is_finance_admin: false }
   mocks.teams = []
-  mocks.directory = [ENGINEERING, SUPPORT]
+  mocks.directory = { teams: [ENGINEERING, SUPPORT], unlisted_count: 0 }
   mocks.invites = []
+  mocks.creation = { may_create: true, policy: 'anyone', site_admins: [], pending_requests: [] }
 })
 
 afterEach(() => {
@@ -99,10 +110,11 @@ afterEach(() => {
 })
 
 describe('TeamsHome with no team', () => {
-  it('goes to the first board when there is a team', () => {
+  it('goes to My work when there is a team (#258)', () => {
     mocks.teams = [{ id: 1, key: 'ENG', name: 'Engineering' }]
     renderHome()
-    expect(screen.getByText('Board')).toBeTruthy()
+    expect(screen.getByText('My work')).toBeTruthy()
+    expect(screen.queryByText('Board')).toBeNull()
   })
 
   it('offers what the sidebar would have, not a form for a new team', () => {
@@ -135,9 +147,15 @@ describe('TeamsHome with no team', () => {
     const list = screen.getByRole('region', { name: 'Teams you can ask to join' })
     const rows = within(list).getAllByRole('listitem')
     expect(rows.map((row) => row.textContent)).toEqual([
-      'ENGEngineering8 people · admins Amina Khan and Demo User',
-      'SUPSupport1 person · admin Nina Petrova',
+      'ENGEngineering8 people · admins Amina Khan, Demo UserAsk to join',
+      'SUPSupport1 person · admin Nina PetrovaAsk to join',
     ])
+  })
+
+  it('says how many teams keep themselves off the list (#259)', () => {
+    mocks.directory = { teams: [ENGINEERING], unlisted_count: 2 }
+    renderHome()
+    expect(screen.getByText('2 teams keep themselves off this list.')).toBeTruthy()
   })
 
   it('keeps creating a team as one option', async () => {
@@ -147,7 +165,7 @@ describe('TeamsHome with no team', () => {
   })
 
   it('puts creating the first team up front on an instance with none', () => {
-    mocks.directory = []
+    mocks.directory = { teams: [], unlisted_count: 0 }
     renderHome()
     expect(screen.getByText('There are no teams on this SoftTrack yet.')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Create the first team' }).getAttribute('href')).toBe(
@@ -171,5 +189,73 @@ describe('TeamsHome with no team', () => {
     const user = renderHome()
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(mocks.logout).toHaveBeenCalled()
+  })
+})
+
+describe('TeamsHome where creating a team is left to some (#306)', () => {
+  beforeEach(() => {
+    mocks.creation = {
+      may_create: false,
+      policy: 'site_admins',
+      site_admins: [person(9, 'Demo User')],
+      pending_requests: [],
+    }
+  })
+
+  it('says who to ask, and offers to ask, in place of creating one', () => {
+    renderHome()
+    expect(screen.getByText('Teams are created by site admins here')).toBeTruthy()
+    expect(screen.getByText('Ask Demo User, or ask for a team of your own.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ask for a team' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Create a team' })).toBeNull()
+  })
+
+  it('does not offer the first team either', () => {
+    mocks.directory = { teams: [], unlisted_count: 0 }
+    renderHome()
+    expect(screen.queryByRole('link', { name: 'Create the first team' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Ask for a team' })).toBeTruthy()
+  })
+
+  it('opens the dialog asking for a name, a key and a reason', async () => {
+    const user = renderHome()
+    await user.click(screen.getByRole('button', { name: 'Ask for a team' }))
+    const dialog = screen.getByRole('dialog', { name: 'Ask for a team' })
+    expect(within(dialog).getByLabelText('Name')).toBeTruthy()
+    expect(within(dialog).getByLabelText('Key')).toBeTruthy()
+    expect(within(dialog).getByLabelText('What it is for')).toBeTruthy()
+    expect(
+      within(dialog).getByText(
+        'The site admins are notified. You become the team’s admin when one of them approves.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('sends the name, the key in capitals and the reason', async () => {
+    mocks.ask.mockResolvedValue({})
+    const user = renderHome()
+    await user.click(screen.getByRole('button', { name: 'Ask for a team' }))
+    const dialog = screen.getByRole('dialog', { name: 'Ask for a team' })
+    await user.type(within(dialog).getByLabelText('Name'), 'Brand studio')
+    await user.type(within(dialog).getByLabelText('Key'), 'brd')
+    await user.type(within(dialog).getByLabelText('What it is for'), 'The rebrand')
+    await user.click(within(dialog).getByRole('button', { name: 'Ask' }))
+    expect(mocks.ask).toHaveBeenCalledWith({
+      data: { name: 'Brand studio', key: 'BRD', reason: 'The rebrand' },
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('shows a request still waiting', () => {
+    mocks.creation.pending_requests = [{ id: 1, name: 'Brand studio', key: 'BRD' }]
+    renderHome()
+    expect(
+      screen.getByText(
+        (_, node) =>
+          node?.tagName === 'SPAN' &&
+          node.textContent ===
+            'You asked for Brand studio · BRD. A site admin will approve or decline it.',
+      ),
+    ).toBeTruthy()
   })
 })

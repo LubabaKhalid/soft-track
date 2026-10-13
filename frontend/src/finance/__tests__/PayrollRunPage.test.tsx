@@ -90,6 +90,7 @@ function draft(overrides: Partial<PayrollRunRead> = {}): PayrollRunRead {
     missing_count: 2,
     reimbursement_totals: [],
     reimbursements: [],
+    left_off: [],
     lines: [
       line(1, 'Amina Khan'),
       line(2, 'Daniel Okafor', {
@@ -145,6 +146,34 @@ describe('A draft run', () => {
     )
     expect(screen.getByText(/have no compensation for this period/).closest('p')?.textContent).toBe(
       '2 people have no compensation for this period and are on the run as missing, not skipped: Ben Adeyemi and Elena Petrova.',
+    )
+  })
+
+  it('names the accounts not on payroll under the totals, and why', () => {
+    renderRun(
+      draft({
+        left_off: [
+          { id: 8, name: 'Carlos Rivera', reason: 'external' },
+          { id: 9, name: 'Demo User', reason: 'service_account' },
+          { id: 10, name: 'Chen Wu', reason: 'contractor' },
+        ],
+      }),
+    )
+    const sentence = screen.getByText(/not on payroll/).closest('p')
+    expect(sentence?.textContent).toBe(
+      '3 accounts are not on payroll and are left off this run: Carlos Rivera, external, Demo User, a service account, and Chen Wu, a contractor.',
+    )
+    // Under the totals row, not among the callouts at the top.
+    const totals = screen.getByText(/^2 lines/)
+    expect(
+      totals.compareDocumentPosition(sentence as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('says one account in the singular, as in the mockup', () => {
+    renderRun(draft({ left_off: [{ id: 9, name: 'Demo User', reason: 'intern' }] }))
+    expect(screen.getByText(/not on payroll/).closest('p')?.textContent).toBe(
+      '1 account is not on payroll and is left off this run: Demo User, an intern.',
     )
   })
 

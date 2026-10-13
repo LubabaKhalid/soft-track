@@ -12,6 +12,7 @@ from app_finance.currencies import router as currencies_router
 from app_finance.expenses import finance as expense_claims_router
 from app_finance.expenses import router as expenses_router
 from app_finance.payroll import router as payroll_router
+from app_finance.payroll import types_router as payroll_types_router
 from app_finance.reimbursements import router as reimbursements_router
 from app_finance.reports import router as finance_reports_router
 from app_identity.admin import router as admin_router
@@ -24,22 +25,27 @@ from lib_softtrack import outside, realtime, trash
 from lib_softtrack.deleting import trash_loop
 from lib_softtrack.digest import digest_loop
 from lib_softtrack.outbound import webhook_loop
+from lib_softtrack.reminders import reminder_loop
+from lib_softtrack.schedules import schedule_loop
 from lib_utils.viewer import ViewerScope
 from app_softtrack.attachments import router as attachments_router
 from app_softtrack.automations import router as automations_router
 from app_softtrack.comments import router as comments_router
 from app_softtrack.custom_fields import router as custom_fields_router
 from app_softtrack.sprints import router as sprints_router
+from app_softtrack.capacity import router as capacity_router
 from app_softtrack.events import router as events_router
 from app_softtrack.imports import router as imports_router
 from app_softtrack.integrations import router as integrations_router
 from app_softtrack.invites import router as invites_router
+from app_softtrack.team_creation import router as team_creation_router
 from app_softtrack.tickets import router as tickets_router
 from app_softtrack.labels import router as labels_router
 from app_softtrack.notifications import router as notifications_router
 from app_softtrack.outbound import router as outbound_router
 from app_softtrack.projects import router as projects_router
 from app_softtrack.reports import router as reports_router
+from app_softtrack.schedules import router as schedules_router
 from app_softtrack.search import router as search_router
 from app_softtrack.statuses import router as statuses_router
 from app_softtrack.teams import router as teams_router
@@ -48,6 +54,9 @@ from app_softtrack.sharing import router as sharing_router
 from app_softtrack.trash import router as trash_router
 from app_softtrack.webhooks import router as webhooks_router
 from app_softtrack.worklogs import router as worklogs_router
+from app_softtrack.timesheet import router as timesheet_router
+from app_softtrack.time_estimates import router as time_estimates_router
+from app_softtrack.workload import me_router as my_work_router
 from app_softtrack.workload import router as workload_router
 from app_softtrack.views import router as views_router
 from lib_utils.errors import ApiError, ApiErrorBody, ErrorCode, api_error_handler
@@ -91,6 +100,19 @@ async def lifespan(app: FastAPI):
     if settings.trash_purging:
         purging = asyncio.create_task(trash_loop())
 
+    # Due-date reminders (#262). Not tied to the mail server, unlike the
+    # digest: a reminder is an inbox row first, and the digest mails it
+    # where there is somewhere to send it.
+    reminding: asyncio.Task | None = None
+    if settings.due_reminders:
+        reminding = asyncio.create_task(reminder_loop())
+
+    # Recurring tickets (#264): the same kind of loop, claiming each
+    # occurrence before it creates anything.
+    scheduling: asyncio.Task | None = None
+    if settings.recurring_tickets:
+        scheduling = asyncio.create_task(schedule_loop())
+
     yield
 
     if digest is not None:
@@ -99,6 +121,10 @@ async def lifespan(app: FastAPI):
         webhooks.cancel()
     if purging is not None:
         purging.cancel()
+    if reminding is not None:
+        reminding.cancel()
+    if scheduling is not None:
+        scheduling.cancel()
 
 
 # Real-time nudges (#103) are published from the ORM's own commit events, so
@@ -161,6 +187,7 @@ app.include_router(identity_router)
 app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(departments_router)
+app.include_router(team_creation_router)
 app.include_router(people_router)
 app.include_router(teams_router)
 app.include_router(invites_router)
@@ -170,6 +197,7 @@ app.include_router(tickets_router)
 app.include_router(comments_router)
 app.include_router(attachments_router)
 app.include_router(sprints_router)
+app.include_router(capacity_router)
 app.include_router(reports_router)
 app.include_router(imports_router)
 app.include_router(search_router)
@@ -180,16 +208,21 @@ app.include_router(trash_router)
 app.include_router(sharing_router)
 app.include_router(custom_fields_router)
 app.include_router(worklogs_router)
+app.include_router(timesheet_router)
+app.include_router(time_estimates_router)
 app.include_router(workload_router)
+app.include_router(my_work_router)
 app.include_router(events_router)
 app.include_router(statuses_router)
 app.include_router(automations_router)
+app.include_router(schedules_router)
 app.include_router(integrations_router)
 app.include_router(webhooks_router)
 app.include_router(outbound_router)
 app.include_router(currencies_router)
 app.include_router(compensation_router)
 app.include_router(payroll_router)
+app.include_router(payroll_types_router)
 app.include_router(expenses_router)
 app.include_router(expense_claims_router)
 app.include_router(reimbursements_router)

@@ -240,6 +240,15 @@ class TicketEventField(str, enum.Enum):
     #: Moved to the trash, or restored from it (#323). The new value is when
     #: it went in, as ISO text; restoring writes an empty one.
     trash = "trash"
+    #: Created by a schedule (#264). The new value is the schedule's name as
+    #: it was then, so the line survives the schedule being renamed or
+    #: removed. Never an opening value: it is the line the Activity feed
+    #: shows for how the ticket began.
+    schedule = "schedule"
+    #: The time estimate, and remaining set by hand (#268), in minutes. What
+    #: the burndown in hours replays.
+    time_estimate = "time_estimate"
+    remaining = "remaining"
 
 
 class DueFilter(str, enum.Enum):
@@ -257,6 +266,48 @@ class DueFilter(str, enum.Enum):
     this_week = "this_week"
     #: No due date at all.
     none = "none"
+
+
+class LabelMatch(str, enum.Enum):
+    """How a filter on several labels reads them (#260).
+
+    The one filter with a second question: a ticket carries many labels, so
+    "Bug and Design" can mean either pile or only the design bugs.
+    """
+
+    #: Tickets carrying at least one of the labels.
+    any = "any"
+    #: Tickets carrying every one of them.
+    all = "all"
+
+
+class DateWindow(str, enum.Enum):
+    """When a ticket was updated or created, as the common questions (#261).
+
+    Relative, so a saved view keeps asking the same question as time passes:
+    "more than 30 days ago" is measured from the viewer's today each time the
+    view is opened, not from the day it was saved. Dates for anything else
+    are a range beside it (`updated_from`, `updated_to`).
+    """
+
+    last_7_days = "last_7_days"
+    last_30_days = "last_30_days"
+    #: Nothing in the last 30 days: where a backlog review starts.
+    over_30_days = "over_30_days"
+
+
+class MissingField(str, enum.Enum):
+    """What a ticket can be filtered on having none of (#261).
+
+    No assignee and no due date were filters before this, and stay where
+    they are: nobody is one of the assignee choices, no due date one of the
+    due filter's.
+    """
+
+    estimate = "estimate"
+    #: No epic (the column is `project_id`).
+    epic = "epic"
+    sprint = "sprint"
 
 
 class TeamRole(str, enum.Enum):
@@ -310,6 +361,11 @@ class NotificationKind(str, enum.Enum):
     #: reviewer or QA assignee. Assignment by another name, told the same
     #: way; `Notification.custom_field_id` says which field.
     field_assigned = "field_assigned"
+    #: The two that come from a date rather than a person (#262), raised by
+    #: the reminder sweep in `lib_softtrack/reminders.py`. No actor; the row's
+    #: `due_date` says which date it was about.
+    due_tomorrow = "due_tomorrow"
+    overdue = "overdue"
 
 
 class AutomationTrigger(str, enum.Enum):
@@ -451,6 +507,43 @@ class CompensationKind(str, enum.Enum):
     other = "other"
 
 
+class TeamCreationPolicy(str, enum.Enum):
+    """Who may create a team on this instance (#306).
+
+    A team takes a key, and a key is never given back, so on an instance
+    with open registration "anyone" lets a stranger take ENG. `anyone` is
+    the default and what creating a team always asked: that somebody is
+    signed in. An account from outside the organisation (#243) never may,
+    whatever this says.
+    """
+
+    anyone = "anyone"
+    site_admins = "site_admins"
+    #: The site admins, and the people named in `TeamCreator`.
+    named_people = "named_people"
+
+
+class EstimateUnit(str, enum.Enum):
+    """What a team estimates in (#268): story points, hours, or both.
+
+    Points is the default, and a team that leaves it sees no change. There is
+    no conversion between the two: points say how big a piece of work is,
+    hours what it was meant to cost, and a team may ask both.
+    """
+
+    points = "points"
+    hours = "hours"
+    both = "both"
+
+
+class TeamRequestState(str, enum.Enum):
+    """Where somebody's request for a team is (#306). Decided once."""
+
+    pending = "pending"
+    approved = "approved"
+    declined = "declined"
+
+
 # ---------------------------------------------------------------------------
 # Link tables
 # ---------------------------------------------------------------------------
@@ -461,6 +554,10 @@ class TeamMember(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", primary_key=True)
     role: TeamRole = Field(default=TeamRole.member)
     joined_at: datetime = Field(default_factory=utcnow)
+    #: This member has muted the team's notifications (#263): nothing from it
+    #: reaches them except the kinds that get through a mute -- being assigned
+    #: and being mentioned. On the membership, so leaving the team forgets it.
+    notifications_muted: bool = Field(default=False)
 
 
 class GuestEpic(SQLModel, table=True):
@@ -513,6 +610,22 @@ class Department(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class EmploymentType(str, enum.Enum):
+    """What kind of account or engagement somebody has with the organisation
+    (#247, #320).
+
+    An account with no type, or an employee, is on payroll. The others are on
+    payroll only when finance switches their type on
+    (`InstanceSettings.payroll_types`) -- except external, which never is.
+    """
+
+    employee = "employee"
+    contractor = "contractor"
+    intern = "intern"
+    external = "external"
+    service_account = "service_account"
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
@@ -531,9 +644,11 @@ class User(SQLModel, table=True):
     #: resets. The first account registered gets it. Distinct from TeamRole,
     #: which only ever means something inside one team.
     is_site_admin: bool = Field(default=False)
-    #: The per-user off switch for the email digest. Only consulted when the
-    #: instance has SMTP configured at all -- with no mail server there is
-    #: nothing to switch off, and the setting is hidden rather than lying.
+    #: Whether email is on for the kinds this person has not set one by one
+    #: (#263). It was the single digest switch before the grid; somebody who
+    #: had turned it off keeps every kind off by email, including kinds added
+    #: after they made that choice. Only consulted when the instance has SMTP
+    #: configured at all.
     email_notifications: bool = Field(default=True)
     #: Copied into every JWT as `ver` and compared on each request. Bumping it
     #: invalidates every token already issued for this user, which is what
@@ -615,6 +730,21 @@ class User(SQLModel, table=True):
     #: the epics it was given there and nothing else (`lib_softtrack/
     #: outside.py`). Never a site or finance admin.
     is_external: bool = Field(default=False)
+    #: What kind of account this is (#320). None behaves as an employee. Not
+    #: an access-control flag: `is_external` is, and the two are not synced.
+    employment_type: Optional[EmploymentType] = Field(
+        default=None,
+        nullable=True,
+    )
+
+    # --- Prepared by a site admin (#303) -----------------------------------
+
+    #: False for an account a site admin created whose owner has not yet
+    #: chosen a password from the link they were sent. It can be assigned work
+    #: and mentioned all the same; the directory and the pickers say it has
+    #: not been activated. True for every account that registered or signed
+    #: in with a provider, which was there to activate it itself.
+    is_activated: bool = Field(default=True)
 
     @property
     def has_password(self) -> bool:
@@ -769,6 +899,42 @@ class ApiToken(SQLModel, table=True):
     expires_at: Optional[datetime] = None
 
 
+class AuthSession(SQLModel, table=True):
+    """One signed-in browser (#308): a row made at sign-in, whose id the
+    session's token carries as `sid`.
+
+    Live while it has not been ended, its token has not expired, the account's
+    `token_version` is still the one it was issued at -- so "sign out
+    everywhere", a password change and a deactivation end every row without
+    touching them -- and it has been used in the last thirty days. Ended and
+    stale rows are kept for a while, so a sign-in can tell a browser the
+    account has used before from a new one, and swept at the next sign-in.
+    API tokens are not sessions; see `ApiToken`.
+    """
+
+    #: Ids are never reused, even on SQLite, where a swept row would
+    #: otherwise hand its id -- and with it any old token that names it -- to
+    #: the account's next session.
+    __table_args__ = {"sqlite_autoincrement": True}
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    #: The browser's User-Agent header as sent, cut to 512 characters. Read
+    #: back as "Firefox on Linux"; nothing else is made of it.
+    user_agent: str = Field(default="")
+    #: The address it signed in from, as `address_of` sees it.
+    ip_address: str = Field(default="")
+    #: The account's `token_version` the session's token carries.
+    token_version: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utcnow)
+    #: Updated at most once a minute, like an API token's.
+    last_used_at: datetime = Field(default_factory=utcnow)
+    #: When its token expires: a session cannot outlive the token it is.
+    expires_at: datetime
+    #: Revoked from the list, or signed out of. Null while it may be live.
+    ended_at: Optional[datetime] = None
+
+
 class PasswordReset(SQLModel, table=True):
     """A pending "forgot password" link (#83).
 
@@ -789,6 +955,11 @@ class PasswordReset(SQLModel, table=True):
     token_version: int
     created_at: datetime = Field(default_factory=utcnow)
     expires_at: datetime
+    #: When the link was emailed (#303), or null if it was only handed to a
+    #: site admin to copy. A link for an account a site admin created lives as
+    #: long as an invitation does; one asked for from "Forgot password" is
+    #: always emailed and lives an hour.
+    emailed_at: Optional[datetime] = None
 
 
 class TeamInvite(SQLModel, table=True):
@@ -866,8 +1037,28 @@ class Team(SQLModel, table=True):
     #: Whether sub-tickets count against a column's limit, or only the work
     #: they are part of.
     wip_counts_subtickets: bool = Field(default=True)
+    #: Points, hours or both (#268). Which estimates the ticket panel offers,
+    #: and what the board's "Has no estimate" asks about.
+    estimate_unit: EstimateUnit = Field(default=EstimateUnit.points)
+    #: What one person can take in a sprint (#269), before anybody changes it
+    #: for a sprint: points for a whole sprint, and minutes for each working
+    #: day. Both shrink with the days somebody is away.
+    capacity_points: int = Field(default=10)
+    capacity_minutes_per_day: int = Field(default=6 * 60)
     archived: bool = Field(default=False)
     created_at: datetime = Field(default_factory=utcnow)
+    #: Whether the team is in the team directory (#259), where people who are
+    #: not on it see its name, key, size and admins and can ask to join. On
+    #: unless a team admin takes it off.
+    listed: bool = Field(default=True)
+    #: Whether anybody signed in -- not an account from outside the
+    #: organisation -- joins it as a member without asking (#259). Off unless
+    #: a team admin turns it on.
+    open_to_join: bool = Field(default=False)
+    #: When a site admin archived it from Administration -> Teams (#307);
+    #: null for a team in use. What being archived does to the team itself
+    #: -- read-only, out of the switcher and the pickers -- is #322's.
+    archived_at: Optional[datetime] = None
 
 
 class Project(SQLModel, table=True):
@@ -964,6 +1155,14 @@ class Ticket(SQLModel, table=True):
     # Story points. Null means "not sized yet", which is a different thing
     # from zero -- a burndown has to be able to tell them apart.
     estimate: Optional[int] = Field(default=None)
+    #: How long it was meant to take, in minutes (#268), beside the points
+    #: rather than in their place. Minutes, like `Worklog.minutes`, so the two
+    #: subtract exactly.
+    time_estimate_minutes: Optional[int] = Field(default=None)
+    #: What is left, in minutes, when somebody has said so by hand. Null means
+    #: worked out: the time estimate less what is logged, never below zero.
+    #: See lib_softtrack/time_estimates.py.
+    remaining_minutes: Optional[int] = Field(default=None)
     #: When it is due (#87). A date rather than a datetime, like a project's
     #: target: "due Friday" is a day, and a timestamp would move it across
     #: midnight for anybody in another timezone.
@@ -1042,6 +1241,23 @@ class SprintAction(SQLModel, table=True):
     ticket_id: int = Field(foreign_key="ticket.id", index=True)
     text: str
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class SprintCapacity(SQLModel, table=True):
+    """One person's capacity in one sprint, where it is not the team's
+    default (#269).
+
+    No row means the default, in proportion to the sprint's working days.
+    `days_off` takes days away from that; a capacity set by hand replaces it,
+    in its own unit only -- null in either unit is still worked out. Leave
+    (#248) and public holidays (#250) will feed the days away when they exist.
+    """
+
+    sprint_id: int = Field(foreign_key="sprint.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True, index=True)
+    days_off: int = Field(default=0)
+    points: Optional[int] = None
+    minutes: Optional[int] = None
 
 
 class TicketEvent(SQLModel, table=True):
@@ -1289,6 +1505,24 @@ class TicketWatch(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class NotificationPreference(SQLModel, table=True):
+    """One person's choice for one kind of notification on one channel (#263).
+
+    Only choices that were made: no row means the kind's registered default
+    (see `lib_softtrack.notification_kinds`). That is what lets a kind added
+    later arrive switched to its default for everybody, and what keeps the
+    defaults exactly today's behaviour for anybody who never opens the page.
+
+    `kind` and `channel` are plain strings rather than enum types, so a new
+    kind (#262) or a new channel (#265) needs no ALTER TYPE.
+    """
+
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    kind: str = Field(primary_key=True, max_length=40)
+    channel: str = Field(primary_key=True, max_length=20)
+    enabled: bool
+
+
 class Notification(SQLModel, table=True):
     """One thing that happened, addressed to one person.
 
@@ -1323,7 +1557,17 @@ class Notification(SQLModel, table=True):
     custom_field_id: Optional[int] = Field(
         default=None, foreign_key="customfield.id", index=True
     )
+    #: For a reminder (#262): the due date it was about. Kept on the row
+    #: rather than read through, unlike the ticket's title, because a moved
+    #: date is a new reminder and this one stays about the old one.
+    due_date: Optional[date] = None
     read_at: Optional[datetime] = Field(default=None, index=True)
+    #: Whether the inbox shows it (#263). False for a kind the person turned
+    #: off in the app but kept by email: the row exists only for the digest.
+    in_app: bool = Field(default=True)
+    #: Whether the digest may mail it (#263), decided when it was raised from
+    #: the person's preferences for its kind.
+    by_email: bool = Field(default=True)
     #: When this row went out in a digest. Set *before* the mail is sent and
     #: only on rows the update actually claimed, so two processes running the
     #: digest loop cannot both send the same notification.
@@ -1331,20 +1575,40 @@ class Notification(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, index=True)
 
 
+class DueReminder(SQLModel, table=True):
+    """A due-date reminder that has been claimed (#262): who, about which
+    ticket, for which date, and which of the three it was.
+
+    The primary key is the whole promise. A reminder goes out once per ticket
+    per date per person, so the sweep inserts this row *before* raising the
+    notification, and an insert that conflicts means another worker -- or an
+    earlier tick, before a restart -- already has it. A moved due date is a
+    different key, which is what "moving the date starts over" means.
+    """
+
+    ticket_id: int = Field(foreign_key="ticket.id", primary_key=True)
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    due_date: date = Field(primary_key=True)
+    #: `lib_softtrack.reminders.Stage`: due_tomorrow, overdue, still_overdue.
+    stage: str = Field(primary_key=True, max_length=20)
+    claimed_at: datetime = Field(default_factory=utcnow)
+
+
 class SavedView(SQLModel, table=True):
     """A named set of filters over one team's tickets.
 
-    The filters are columns rather than a JSON blob. The set is small, fixed
-    and already described by enums the API publishes, so columns get typed
-    request and response models -- and therefore a typed frontend client --
-    where a blob would reach the browser as `unknown`. Foreign keys also mean
-    a view cannot outlive the label or sprint it filters on without somebody
-    having to decide what happens, which is the conversation a blob quietly
-    skips.
+    Each filter is a list (#260): several values in one filter are
+    alternatives, and different filters narrow each other. The lists are JSON
+    columns rather than a link table per filter, because a view is read and
+    written whole and never searched by what it filters on. What the foreign
+    keys used to stand for is kept where it always really lived -- in the code
+    that deletes or merges a status or a label, which takes it out of every
+    view's list (lib_softtrack/statuses.py, lib_softtrack/labels.py). The API
+    still publishes each list with its enum or id type, so the frontend client
+    stays typed.
 
-    Every field is nullable and null means "no opinion", so a view with
-    nothing set is "all tickets" rather than a contradiction that matches
-    nothing.
+    Empty everywhere means "no opinion", so a view with nothing set is "all
+    tickets" rather than a contradiction that matches nothing.
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -1356,21 +1620,70 @@ class SavedView(SQLModel, table=True):
     #: is a tracker where people paste URLs to each other instead.
     is_shared: bool = Field(default=False, index=True)
 
-    #: Cleared when the status is deleted -- see lib_softtrack/statuses.py.
-    status_id: Optional[int] = Field(default=None, foreign_key="workflowstatus.id")
-    priority: Optional[TicketPriority] = None
-    assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    #: Distinct from `assignee_id is None`, which means "any assignee". The two
-    #: are mutually exclusive and the request model rejects setting both.
+    #: Status ids. Cleared of a status when it is deleted -- see
+    #: lib_softtrack/statuses.py.
+    status_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: Each `*_exclude` turns its filter round: every value except these.
+    status_exclude: bool = Field(default=False)
+    #: `TicketPriority` values.
+    priorities: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    priority_exclude: bool = Field(default=False)
+    #: User ids.
+    assignee_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: Nobody assigned, as one more choice beside `assignee_ids`: alone it is
+    #: "unassigned", with them it is "Mei, or nobody".
     unassigned: bool = Field(default=False)
-    label_id: Optional[int] = Field(default=None, foreign_key="label.id")
+    assignee_exclude: bool = Field(default=False)
+    #: Label ids. Merged or cleared with the label -- see lib_softtrack/labels.py.
+    label_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: Every one of the labels rather than any of them (`LabelMatch.all`).
+    label_all: bool = Field(default=False)
+    label_exclude: bool = Field(default=False)
+    #: `TicketType` values.
+    types: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    type_exclude: bool = Field(default=False)
+
     project_id: Optional[int] = Field(default=None, foreign_key="project.id")
     #: Cleared when the sprint is deleted -- see lib_softtrack/sprints.py. A view
     #: pointing at a sprint that no longer exists would match nothing and look
     #: broken rather than empty.
     sprint_id: Optional[int] = Field(default=None, foreign_key="sprint.id")
     due: Optional[DueFilter] = None
-    type: Optional[TicketType] = None
+
+    #: "Me" as an assignee or creator (#261): whoever is looking when the view
+    #: is opened, not whoever saved it, so a shared "assigned to me" shows
+    #: each person their own tickets.
+    assignee_me: bool = Field(default=False)
+    #: User ids of who created the ticket, with the same switch as the rest.
+    creator_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    creator_me: bool = Field(default=False)
+    creator_exclude: bool = Field(default=False)
+    #: Only the tickets the viewer watches -- the viewer's, as with "me".
+    watching: bool = Field(default=False)
+    #: When the ticket last changed, or was created: a window relative to the
+    #: viewer's today, and/or a range of days, both ends included.
+    updated: Optional[DateWindow] = None
+    updated_from: Optional[date] = None
+    updated_to: Optional[date] = None
+    created: Optional[DateWindow] = None
+    created_from: Optional[date] = None
+    created_to: Optional[date] = None
+    #: `MissingField` values: tickets with none of each.
+    has_no: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
 
     #: Not a filter -- it narrows nothing -- but part of what a view *is*: the
     #: same tickets read very differently by column and by project.
@@ -1584,6 +1897,95 @@ class AutomationRun(SQLModel, table=True):
     #: is now, which is exactly the question the log is not being asked.
     summary: str
     created_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class TicketSchedule(SQLModel, table=True):
+    """Work that comes back on a date (#264): what to create, and when.
+
+    The ninth thing that can start work, beside the eight triggers of an
+    automation rule, and the only one nobody has to remember. It creates an
+    ordinary ticket through the ordinary path (`tickets.create_scheduled`),
+    and from there the ticket is a ticket like any other; the schedule keeps
+    no hold on it beyond the `ScheduleRun` that says it made it.
+
+    **What it creates** is the ticket's own fields, as columns. Labels are a
+    JSON list of ids, read through the team's labels when a ticket is made,
+    so a deleted label drops out without anything having to clear it here.
+    The description is text: a template fills it in the dialog and nothing
+    remembers which (see TicketTemplate).
+
+    **When** is a frequency and what that frequency needs: weekdays and an
+    interval in weeks, or a day of the month -- a date, or its first or last
+    working day -- for a month, a quarter (January, April, July, October) or
+    a year (`month`). No cron syntax. `starts_on` is the week an interval of
+    weeks counts from; `active_since` is the first day an occurrence may be
+    for, moved to the day it is switched back on so a paused schedule does not
+    make up for the weeks it was off.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+
+    title: str = Field(max_length=200)
+    description: Optional[str] = None
+    type: TicketType = Field(default=TicketType.task)
+    priority: TicketPriority = Field(default=TicketPriority.no_priority)
+    #: Created unassigned once this person is no longer on the team, or no
+    #: longer active; the schedule keeps the name for when they are back.
+    assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    label_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: The epic. Cleared when the epic is purged from the trash.
+    project_id: Optional[int] = Field(default=None, foreign_key="project.id")
+    estimate: Optional[int] = None
+    #: A due date this many days after the day the ticket is created; none
+    #: when null.
+    due_after_days: Optional[int] = None
+    #: Into the active sprint, or the backlog when there is none.
+    into_active_sprint: bool = Field(default=False)
+
+    #: `lib_softtrack.schedules.Frequency`.
+    frequency: str = Field(max_length=10)
+    #: Every this many weeks; 1 for every other frequency.
+    interval: int = Field(default=1)
+    #: Monday is 0, as Python counts them. For a weekly schedule.
+    weekdays: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: `lib_softtrack.schedules.MonthDay`, for a month, a quarter or a year.
+    month_day: Optional[str] = Field(default=None, max_length=20)
+    #: 1 to 31 when `month_day` is a date; the 31st of a short month is its
+    #: last day.
+    day_of_month: Optional[int] = None
+    #: 1 to 12, for a yearly schedule.
+    month: Optional[int] = None
+    #: Only once the ticket it made last is done or cancelled.
+    wait_for_previous: bool = Field(default=False)
+
+    starts_on: date
+    active_since: date
+    paused_at: Optional[datetime] = None
+    paused_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class ScheduleRun(SQLModel, table=True):
+    """One occurrence of a schedule, claimed (#264), and the ticket it made.
+
+    Keyed by schedule and day, and inserted *before* the ticket is created,
+    the way a `DueReminder` is: two workers waking at once both insert the
+    same key and only one insert takes, so each occurrence makes one ticket.
+    `ticket_id` is filled once the ticket exists, and cleared if the ticket
+    is purged -- the claim stays, so the occurrence is not made again.
+    """
+
+    schedule_id: int = Field(foreign_key="ticketschedule.id", primary_key=True)
+    occurs_on: date = Field(primary_key=True)
+    ticket_id: Optional[int] = Field(default=None, foreign_key="ticket.id", index=True)
+    claimed_at: datetime = Field(default_factory=utcnow)
 
 
 class Repository(SQLModel, table=True):
@@ -2023,3 +2425,87 @@ class Budget(SQLModel, table=True):
             "viewonly": True,
         }
     )
+
+
+class InstanceSettings(SQLModel, table=True):
+    """Settings for the whole instance, kept in the database (#306).
+
+    One row, id 1, read through `lib_softtrack.team_creation`; no row means
+    every default. A setting here may also be set in the environment, which
+    wins -- see `web.Settings`.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_creation: TeamCreationPolicy = Field(default=TeamCreationPolicy.anyone)
+    #: Employment types finance has put on payroll besides employees (#320),
+    #: read through `lib_finance.on_payroll`. Never `external`.
+    payroll_types: list[str] = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class TeamCreator(SQLModel, table=True):
+    """Somebody named as allowed to create teams (#306), when the instance
+    leaves it to named people. Kept whatever the policy, so switching to
+    "site admins only" and back does not lose the list."""
+
+    user_id: int = Field(foreign_key="user.id", primary_key=True)
+    added_by_id: int = Field(foreign_key="user.id")
+    added_at: datetime = Field(default_factory=utcnow)
+
+
+class TeamRequest(SQLModel, table=True):
+    """Somebody who may not create a team asking for one (#306).
+
+    The site admins are told, and approving creates the team with the person
+    who asked as its admin. A decided request stays, as the record of who
+    asked and who decided.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    requester_id: int = Field(foreign_key="user.id", index=True)
+    name: str
+    key: str
+    reason: str
+    state: TeamRequestState = Field(default=TeamRequestState.pending, index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    decided_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    decided_at: Optional[datetime] = None
+    #: Why it was declined, told to the person who asked. Optional.
+    decline_reason: Optional[str] = None
+    #: The team approving it created.
+    team_id: Optional[int] = Field(default=None, foreign_key="team.id")
+
+    requester: Optional[User] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "TeamRequest.requester_id",
+            "viewonly": True,
+        }
+    )
+
+
+class TeamJoinRequest(SQLModel, table=True):
+    """Somebody asking to join a team (#259), with an optional note.
+
+    The team's admins are told, and approve with a role or decline. Like an
+    invitation, a row that disappears: approving makes the TeamMember row,
+    which is the record that matters, and declining or withdrawing leaves
+    nothing to keep. One open request per person per team, enforced in the
+    database, and it runs out when an invitation sent at the same moment
+    would (INVITE_EXPIRE_DAYS).
+    """
+
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id", "requester_id", name="uq_team_join_request_team_requester"
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    requester_id: int = Field(foreign_key="user.id", index=True)
+    #: In their own words, for the admins. Optional.
+    note: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime

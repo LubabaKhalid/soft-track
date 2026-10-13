@@ -100,6 +100,22 @@ record is a row. **Record pay** adds one.
 - **Nobody is quietly left out.** Somebody with nothing in effect is listed
   last, marked *Nothing recorded*, and counted. A new starter whose first
   record is still ahead says when they start.
+- **The list is who is on payroll** (#320), the same people a run has. Who
+  that is comes from the employment type an account has (#247), set in
+  **Administration → Users**:
+  - An account with no type, or an employee, is on payroll.
+  - A contractor, an intern or a service account is on payroll when finance
+    puts its type on payroll, or while it has pay in effect.
+  - An account from outside the organisation never is, whatever pay is
+    recorded for it: one marked from outside (#243), or one typed external.
+  - Under the list, a line counts the people on payroll and names the
+    accounts that are not: "11 people on payroll · 2 accounts are not: Carlos
+    Rivera, Demo User". Neither the count nor the names follow the filters.
+- **Finance decides which types are on payroll.** A finance admin ticks
+  *Also on payroll: Contractors, Interns, Service accounts* under the list.
+  None is ticked to begin with. A type that is ticked is on payroll the way
+  employees are: somebody of that type with no pay recorded is missing, not
+  left off. External can't be ticked.
 - **Totals are per currency and per schedule.** Current pay adds up as
   "EUR €24,700.00 monthly · USD $3,100.00 semi-monthly". Nothing is converted
   and nothing is annualised: there is no rate to add euros to pounds, or a
@@ -112,9 +128,16 @@ bureau's business.
 
 On the API, all finance-admin only:
 
-- `GET /finance/compensation` lists everybody active. It takes `q`,
+- `GET /finance/compensation` lists everybody on payroll. It takes `q`,
   `department_id`, `currency`, `limit` and `offset`, and returns `totals` and
-  `missing` with the rows.
+  `missing` with the rows. It also returns `on_payroll`, how many people are,
+  and `not_on_payroll`, each active account that is not, with its `id`,
+  `name` and `reason`: `contractor`, `intern`, `service_account` or
+  `external`. These two ignore the filters.
+- `GET /finance/payroll/types` and `PUT /finance/payroll/types` read and set
+  the types on payroll besides employees, as `{"types": ["contractor"]}`.
+  Only `contractor`, `intern` and `service_account` can be set; anything else
+  is a 422.
 - `GET /finance/compensation/{username}` returns one person's history. Each
   record is marked `scheduled`, `current`, `past` or `corrected`.
 - `POST /finance/compensation/{username}` records pay. A correction carries
@@ -143,16 +166,24 @@ and they stay editable for payroll that runs from the 26th.
   September are two runs, because a period's lines only make sense for the
   people paid on that schedule. Runs on the same schedule never cover the same
   day twice (`409 payroll_run_overlaps`), so nobody is paid twice for it.
+- **Who is on a run.** Everybody on payroll (#320), as the Compensation list
+  says it, whose pay is on this run's schedule, and everybody on payroll with
+  no pay at all. An account from outside the organisation never is, even with
+  pay recorded.
+- **Left off, and said so.** Under the totals, a draft names the active
+  accounts that are not on payroll and why: "2 accounts are not on payroll and
+  are left off this run: Carlos Rivera, external, and Demo User, a service
+  account." Somebody who is paid on another schedule is on that schedule's
+  run, and not named here.
 - **A draft follows compensation as it changes.** Its lines are worked out
-  whenever it is read. That means everybody active whose pay in effect on the
-  period's last day is on this schedule, plus everybody active with no pay in
-  effect at all. Pay recorded, or an account opened, after the run was
+  whenever it is read, from the pay in effect on the period's last day. Pay
+  recorded, an account opened, or a type put on payroll after the run was
   generated is on it before it is approved. It is the pay on the last day, not
   a share of the month: a raise halfway through is an adjustment somebody
   decides, not a proration SoftTrack guesses.
-- **Missing, not skipped.** People with no compensation are on the run as
-  lines, at the bottom, named in a callout. **Record pay** on the line records
-  it there and then. Approving warns who the run will not pay.
+- **Missing, not skipped.** People on payroll with no compensation are on the
+  run as lines, at the bottom, named in a callout. **Record pay** on the line
+  records it there and then. Approving warns who the run will not pay.
 - **A line takes a one-off adjustment** in its own currency, positive or
   negative, and always with a reason ("+$400.00 On-call, 4 weekends"). An
   adjustment can't take a line below zero. Somebody who leaves the run before
@@ -179,7 +210,7 @@ On the API, all under `/finance/payroll/runs`:
 | | |
 | --- | --- |
 | `GET /`, `POST /` | List runs; generate a draft (`pay_schedule`, `period_start`, `period_end`) |
-| `GET /{id}`, `DELETE /{id}` | One run and its lines; throw away a draft |
+| `GET /{id}`, `DELETE /{id}` | One run and its lines, and on a draft `left_off`, the accounts not on payroll; throw away a draft |
 | `PUT /{id}/lines/{user_id}/adjustment` | `{"amount_minor": 40000, "note": "…"}`, and `DELETE` to take it off |
 | `POST /{id}/approve`, `POST /{id}/paid` | Move it on |
 | `GET /{id}/export` | The CSV, once approved |

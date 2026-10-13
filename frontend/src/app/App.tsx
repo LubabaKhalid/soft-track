@@ -9,6 +9,10 @@ import InvitePage from '@/auth/InvitePage'
 import LoginPage from '@/auth/LoginPage'
 import OAuthCallbackPage from '@/auth/OAuthCallbackPage'
 import NewTeamPage from '@/team/NewTeamPage'
+import TeamsPage from '@/team/TeamsPage'
+import MyWorkPage from '@/mywork/MyWorkPage'
+import MyWorkRoute from '@/mywork/MyWorkRoute'
+import TimesheetPage from '@/mywork/TimesheetPage'
 import { InsidersOnly } from '@/team/InsidersOnly'
 import BudgetsPage from '@/finance/BudgetsPage'
 import CompensationHistoryPage from '@/finance/CompensationHistoryPage'
@@ -26,7 +30,10 @@ import PeopleLayout from '@/people/PeopleLayout'
 import ProfilePage from '@/people/ProfilePage'
 import RegisterPage from '@/auth/RegisterPage'
 import ResetPasswordPage from '@/auth/ResetPasswordPage'
+import WelcomePage from '@/auth/WelcomePage'
 import AdminDepartmentsPage from '@/settings/AdminDepartmentsPage'
+import AdminTeamsPage from '@/settings/AdminTeamsPage'
+import AdminSettingsPage from '@/settings/AdminSettingsPage'
 import AdminUsersPage from '@/settings/AdminUsersPage'
 import NotificationSettings from '@/settings/NotificationSettings'
 import ProfileSettings from '@/settings/ProfileSettings'
@@ -37,6 +44,7 @@ import TeamGeneralSettings from '@/settings/TeamGeneralSettings'
 import TeamIntegrationSettings from '@/settings/TeamIntegrationSettings'
 import TeamLabelSettings from '@/settings/TeamLabelSettings'
 import TeamMembersSettings from '@/settings/TeamMembersSettings'
+import InviteManyPage from '@/settings/InviteManyPage'
 import TeamFieldSettings from '@/settings/TeamFieldSettings'
 import TeamStatusSettings from '@/settings/TeamStatusSettings'
 import TeamTemplateSettings from '@/settings/TeamTemplateSettings'
@@ -59,6 +67,10 @@ export default function App() {
             cannot wait for a session (#83). */}
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* A first password for an account a site admin made (#303). The
+            token is taken out of the path as soon as it is read. */}
+        <Route path="/welcome/:token" element={<WelcomePage />} />
+        <Route path="/welcome" element={<WelcomePage />} />
         {/* Where a sign-in with Google or GitHub comes back to. Outside
             RequireAuth by necessity: the ticket it is carrying is what the
             person is about to become authenticated with, and it has not been
@@ -115,6 +127,7 @@ export default function App() {
               element={<Navigate to="members" replace />}
             />
             <Route path="teams/:teamKey/members" element={<TeamMembersSettings />} />
+            <Route path="teams/:teamKey/members/invite" element={<InviteManyPage />} />
             <Route path="teams/:teamKey/general" element={<TeamGeneralSettings />} />
             <Route path="teams/:teamKey/statuses" element={<TeamStatusSettings />} />
             <Route path="teams/:teamKey/labels" element={<TeamLabelSettings />} />
@@ -134,6 +147,8 @@ export default function App() {
             <Route element={<RequireSiteAdmin />}>
               <Route path="admin/users" element={<AdminUsersPage />} />
               <Route path="admin/departments" element={<AdminDepartmentsPage />} />
+              <Route path="admin/teams" element={<AdminTeamsPage />} />
+              <Route path="admin/settings" element={<AdminSettingsPage />} />
             </Route>
             {/* Finance (#130): anyone without the flag who follows a link
                 here is told who can grant it, whatever the page. */}
@@ -154,6 +169,27 @@ export default function App() {
               <Route path="*" element={<Navigate to="/settings/finance" replace />} />
             </Route>
           </Route>
+
+          {/* Everything that is mine, across every team (#258): where signing
+              in lands. With no team, the page for somebody on none (#318). */}
+          <Route path="/my-work" element={<MyWorkRoute />}>
+            <Route index element={<MyWorkPage />} />
+            {/* My time (#267), beside it. */}
+            <Route path="time" element={<TimesheetPage />} />
+          </Route>
+
+          {/* The teams there are, and asking to join one (#259). Case-
+              sensitive for the reason /people is, below: /TEAMS is where a
+              team keyed TEAMS would live. */}
+          <Route
+            path="/teams"
+            caseSensitive
+            element={
+              <InsidersOnly area="teams">
+                <TeamsPage />
+              </InsidersOnly>
+            }
+          />
 
           {/* People (#125): everyone on the instance. Case-sensitive, unlike
               every other route: React Router otherwise matches without

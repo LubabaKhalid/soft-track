@@ -30,7 +30,8 @@ import type {
   PayrollAdjustment,
   PayrollRunCreate,
   PayrollRunPage,
-  PayrollRunRead
+  PayrollRunRead,
+  PayrollTypes
 } from '../../models';
 
 import { apiClient } from '../../../client';
@@ -738,3 +739,165 @@ export function useExportPayrollRunFinancePayrollRunsRunIdExportGet<TData = Awai
 
 
 
+/**
+ * The employment types on payroll besides employees (#320).
+ * @summary Get Payroll Types
+ */
+export const getPayrollTypesFinancePayrollTypesGet = (
+
+ signal?: AbortSignal
+) => {
+
+
+      return apiClient<PayrollTypes>(
+      {url: `/finance/payroll/types`, method: 'GET', signal
+    },
+      );
+    }
+
+
+
+
+export const getGetPayrollTypesFinancePayrollTypesGetQueryKey = () => {
+    return [
+    `/finance/payroll/types`
+    ] as const;
+    }
+
+
+export const getGetPayrollTypesFinancePayrollTypesGetQueryOptions = <TData = Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayrollTypesFinancePayrollTypesGetQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>> = ({ signal }) => getPayrollTypesFinancePayrollTypesGet(signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPayrollTypesFinancePayrollTypesGetQueryResult = NonNullable<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>>
+export type GetPayrollTypesFinancePayrollTypesGetQueryError = unknown
+
+
+export function useGetPayrollTypesFinancePayrollTypesGet<TData = Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPayrollTypesFinancePayrollTypesGet<TData = Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPayrollTypesFinancePayrollTypesGet<TData = Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Payroll Types
+ */
+
+export function useGetPayrollTypesFinancePayrollTypesGet<TData = Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPayrollTypesFinancePayrollTypesGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPayrollTypesFinancePayrollTypesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
+ * Put contractors, interns or service accounts on payroll, or take them
+ * off. Drafts follow at once; approved runs do not change.
+ * @summary Set Payroll Types
+ */
+export const setPayrollTypesFinancePayrollTypesPut = (
+    payrollTypes: PayrollTypes,
+ signal?: AbortSignal
+) => {
+
+
+      return apiClient<PayrollTypes>(
+      {url: `/finance/payroll/types`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: payrollTypes, signal
+    },
+      );
+    }
+
+
+
+
+export const getSetPayrollTypesFinancePayrollTypesPutMutationKey = () => ['setPayrollTypesFinancePayrollTypesPut'] as const;
+
+export const getSetPayrollTypesFinancePayrollTypesPutMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>, TError,SetPayrollTypesFinancePayrollTypesPutMutationVariables, TContext>, }
+): UseMutationOptions<Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>, TError,SetPayrollTypesFinancePayrollTypesPutMutationVariables, TContext> => {
+
+const mutationKey = getSetPayrollTypesFinancePayrollTypesPutMutationKey();
+const {mutation: mutationOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>, SetPayrollTypesFinancePayrollTypesPutMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  setPayrollTypesFinancePayrollTypesPut(data,)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPayrollTypesFinancePayrollTypesPutMutationResult = NonNullable<Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>>
+    export type SetPayrollTypesFinancePayrollTypesPutMutationBody = PayrollTypes
+    export type SetPayrollTypesFinancePayrollTypesPutMutationError = HTTPValidationError
+    export type SetPayrollTypesFinancePayrollTypesPutMutationVariables = {data: PayrollTypes}
+
+    /**
+ * @summary Set Payroll Types
+ */
+export const useSetPayrollTypesFinancePayrollTypesPut = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>, TError,SetPayrollTypesFinancePayrollTypesPutMutationVariables, TContext>, }
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof setPayrollTypesFinancePayrollTypesPut>>,
+        TError,
+        SetPayrollTypesFinancePayrollTypesPutMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetPayrollTypesFinancePayrollTypesPutMutationOptions(options), queryClient);
+    }

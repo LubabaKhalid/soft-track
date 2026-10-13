@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
-import { toSearchParams } from '@/board/filters'
+import { searchString, toSearchParams } from '@/board/filters'
 import { withGrouping } from '@/board/grouping'
 import { Sidebar } from '@/board/Sidebar'
 import { DEFAULT_SORT, withSort } from '@/board/sorting'
@@ -20,7 +20,8 @@ export type PeopleOutlet = {
 }
 
 /**
- * The frame around the people pages (#125): the same sidebar as the board.
+ * The frame around the people pages (#125), and around My work (#258): the
+ * same sidebar as the board.
  *
  * The directory is nobody's team, but the sidebar is always some team's, so
  * it is the team whose board was open last -- opening People from OPS keeps
@@ -65,7 +66,7 @@ export default function PeopleLayout() {
           withGrouping(toSearchParams(filters), arrangement?.grouping ?? 'status'),
           arrangement?.sort ?? DEFAULT_SORT,
         )
-        navigate({ pathname: `/${team.key}`, search: search.toString() })
+        navigate({ pathname: `/${team.key}`, search: searchString(search) })
       }}
       isAdmin={isTeamAdmin}
     />
