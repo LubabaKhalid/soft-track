@@ -125,6 +125,59 @@ did the work.
 A team's **key** cannot be changed. `ENG-42` is already in commit messages,
 chat logs and browser history by the time anyone wants to rename it.
 
+### Archiving a team, and deleting one that was a mistake
+
+A team that is finished is **archived** (#322): Settings → the team → General,
+under **Archive**, by one of its admins, or from Administration → Teams by a
+site admin (#307). Both set the same `team.archived_at`, and both unarchive.
+Before anything happens, a dialog counts what stops -- automation rules,
+outgoing webhooks, repository links and recurring tickets -- and how many open
+tickets stay open and assigned (`GET /teams/{id}/archive-preview`, admins and
+site admins). Archiving a team that is archived already changes nothing and
+keeps its date.
+
+An archived team is **read-only for everybody on it**, admins included. Every
+write to what it contains is refused with `403 team_read_only` -- tickets,
+comments, attachments, reactions, time, sprints, settings, members joining,
+leaving or being removed, a ticket moved into or out of it, a link to one of
+its tickets from another team, an import -- and its invitations stop working
+until it is unarchived. What it still takes is being unarchived, which puts it
+back exactly as it was, and being deleted if it is empty.
+
+It is **out of the way and still there**. `GET /teams` returns it, with
+`archived: true` and `archived_at`, and the team switcher, the move-ticket
+picker, the command palette and the pages that pick a team to land on leave it
+out; the team directory and invitations do too, and search across all teams
+leaves its tickets out unless the search is narrowed to it (`team_id`). Its
+board opens by its key with a banner -- "Engineering is archived. Read-only
+since 30 Sep 2026." -- and Unarchive for its admins and site admins, and
+nothing on it can be created, dragged or edited. `ENG-42` keeps resolving, and
+the ticket says the team is archived. In Settings an archived team shows only
+General, where it is unarchived.
+
+While it is archived, nothing acts on its own: its **automation rules** do not
+run, its **outgoing webhooks** queue nothing (a delivery queued before is not
+sent), its **repositories** accept a signed delivery and link nothing --
+answering `team_archived: true` in the provider's delivery log -- and its
+**recurring tickets** and **due reminders** stop.
+
+**Delete** is only for a team with no tickets, the trash included: the one
+made to try the product, or by mistake. `DELETE /teams/{id}` (its admins, and
+site admins) and `DELETE /admin/teams/{id}` are one routine and agree --
+archived or not, empty decides, and a team with work in it answers `409
+team_not_empty` and is archived instead. Its rules, webhooks, repositories,
+views, epics, sprints, fields, labels, statuses, templates, invitations and
+memberships go with it.
+
+**A key is never given back.** Creating or asking for a team with an archived
+team's key is refused with `400 team_key_archived` -- "ENG belongs to an
+archived team, and a key is never given back." -- said under the Key field.
+A deleted team's key stays taken too if the team ever gave out an identifier
+(its tickets were moved to another team, or purged from the trash), since
+`ENG-42` may still be in commit messages and in a "Moved from ENG-42" comment:
+that answers `400 team_key_retired`. A team deleted before its first ticket
+left no identifier anywhere, and its key is free again.
+
 ### Somebody on no team
 
 An account on no team lands on a page of its own at `/` (#318), not on the

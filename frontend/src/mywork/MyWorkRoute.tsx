@@ -1,4 +1,5 @@
 import PeopleLayout from '@/people/PeopleLayout'
+import { activeTeams } from '@/team/archived'
 import { NoTeamHome } from '@/team/NoTeamHome'
 import { useMyTeams } from '@/team/useTeams'
 import { Loading } from '@/ui/Loading'
@@ -21,6 +22,7 @@ export default function MyWorkRoute() {
       </div>
     )
   }
-  if (!teams || teams.length === 0) return <NoTeamHome />
+  // Archived teams (#322) give it no sidebar to show.
+  if (!teams || activeTeams(teams).length === 0) return <NoTeamHome />
   return <PeopleLayout />
 }

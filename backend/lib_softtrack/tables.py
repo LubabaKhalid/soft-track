@@ -2444,6 +2444,22 @@ class InstanceSettings(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class RetiredTeamKey(SQLModel, table=True):
+    """The key of a deleted team that had given out identifiers (#322).
+
+    A team is deleted only when it has no tickets, but it may have had them:
+    moved to another team, or purged from the trash. `ENG-42` is then still
+    in commit messages, chat logs and a "Moved from ENG-42" comment, and a
+    new team keyed ENG would make it point at somebody else's work -- the
+    reason a key cannot be changed, and an archived team's cannot be reused.
+    A team deleted before its first ticket left no identifier anywhere, and
+    its key is free again.
+    """
+
+    key: str = Field(primary_key=True)
+    retired_at: datetime = Field(default_factory=utcnow)
+
+
 class TeamCreator(SQLModel, table=True):
     """Somebody named as allowed to create teams (#306), when the instance
     leaves it to named people. Kept whatever the policy, so switching to

@@ -292,6 +292,7 @@ export * from './statusLoad';
 export * from './statusOrder';
 export * from './statusRead';
 export * from './statusUpdate';
+export * from './teamArchivePreview';
 export * from './teamCapacity';
 export * from './teamCreate';
 export * from './teamCreatedVsResolvedTeamsTeamIdCreatedVsResolvedGetParams';

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/auth/useAuth'
 import { useTranslation } from '@/i18n'
+import { activeTeams, isArchived } from '@/team/archived'
 import { useMyTeams } from '@/team/useTeams'
 import { Icon, type IconName } from '@/ui/Icon'
 import { Loading } from '@/ui/Loading'
@@ -23,7 +24,7 @@ export default function SettingsLayout() {
   const { data: teams, isLoading } = useMyTeams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { t } = useTranslation(['settings', 'common'])
+  const { t } = useTranslation(['settings', 'common', 'team'])
 
   if (isLoading || !user) {
     return (
@@ -51,7 +52,7 @@ export default function SettingsLayout() {
           : [{ to: '/settings/expenses', label: t('layout.nav.expenses'), icon: 'receipt' as const }]),
       ],
     },
-    ...(teams ?? []).map((team) => ({
+    ...activeTeams(teams ?? []).map((team) => ({
       title: t('layout.teamGroup', { team: team.name, teamKey: team.key }),
       entries: [
         {
@@ -105,6 +106,18 @@ export default function SettingsLayout() {
           label: t('layout.nav.shareLinks'),
           icon: 'link' as IconName,
         },
+        {
+          to: `/settings/teams/${team.key}/general`,
+          label: t('layout.nav.general'),
+          icon: 'settings' as IconName,
+        },
+      ],
+    })),
+    // An archived team (#322) takes no changes, so of its settings only
+    // General is offered: where it is unarchived, or deleted when empty.
+    ...(teams ?? []).filter(isArchived).map((team) => ({
+      title: t('team:archived.navTitle', { team: team.name, teamKey: team.key }),
+      entries: [
         {
           to: `/settings/teams/${team.key}/general`,
           label: t('layout.nav.general'),
@@ -187,7 +200,8 @@ export default function SettingsLayout() {
   ]
 
   const allEntries = groups.flatMap((group) => group.entries)
-  const backTo = teams && teams.length > 0 ? `/${teams[0].key}` : '/'
+  const firstInUse = activeTeams(teams ?? [])[0]
+  const backTo = firstInUse ? `/${firstInUse.key}` : '/'
 
   return (
     <div className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-6">

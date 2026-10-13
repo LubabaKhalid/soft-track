@@ -145,13 +145,17 @@ def access(session: Session, user: User) -> TeamCreationAccess:
 
 
 def _require_key_free(session: Session, key: str) -> None:
-    taken = session.exec(select(Team.id).where(Team.key == key)).first()
+    # Imported here, as `approve_request` imports `create_team`. A key an
+    # archived or deleted team holds (#322) is refused as creating one is.
+    from lib_softtrack.teams import require_key_free
+
+    require_key_free(session, key)
     asked = session.exec(
         select(TeamRequest.id).where(
             TeamRequest.key == key, TeamRequest.state == TeamRequestState.pending
         )
     ).first()
-    if taken is not None or asked is not None:
+    if asked is not None:
         raise api_error(
             status_code=400,
             code=ErrorCode.team_key_taken,

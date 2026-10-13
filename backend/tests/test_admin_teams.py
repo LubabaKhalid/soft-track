@@ -365,7 +365,11 @@ def test_an_archived_teams_key_stays_taken(client, instance):
         headers=instance["amina"]["headers"],
     )
     assert response.status_code == 400
-    assert response.json()["code"] == "team_key_taken"
+    # Its own code (#322), so the form can say why.
+    assert response.json()["code"] == "team_key_archived"
+    assert response.json()["detail"] == (
+        "HCK belongs to an archived team, and a key is never given back."
+    )
 
 
 def test_only_a_site_admin_archives(client, instance):

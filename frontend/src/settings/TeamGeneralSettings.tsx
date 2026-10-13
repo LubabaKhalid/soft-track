@@ -1,19 +1,27 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useId, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import {
+  getArchivePreviewTeamsTeamIdArchivePreviewGetQueryKey,
+  useArchivePreviewTeamsTeamIdArchivePreviewGet,
+  useDeleteTeamTeamsTeamIdDelete,
   useListTeamMembersTeamsTeamIdMembersGet,
   useUpdateTeamTeamsTeamIdPatch,
 } from '@/api/generated/endpoints/teams/teams'
-import type { EstimateUnit, TeamRead } from '@/api/generated/models'
+import type { EstimateUnit, TeamArchivePreview, TeamRead } from '@/api/generated/models'
+import { parseServerDate } from '@/api/dates'
 import { errorDetail } from '@/api/errors'
 import { useAuth } from '@/auth/useAuth'
 import { Trans, userText, useTranslation } from '@/i18n'
-import { formatList } from '@/i18n/format'
+import { formatDate, formatList } from '@/i18n/format'
+import { stoppingParts } from '@/settings/archivePreview'
+import { activeTeams, isArchived } from '@/team/archived'
 import { useTeamByKey } from '@/team/useTeams'
 import { Icon } from '@/ui/Icon'
 import { Loading } from '@/ui/Loading'
+import { useFocusTrap } from '@/ui/useFocusTrap'
 
 export default function TeamGeneralSettings() {
   const { teamKey } = useParams()
@@ -24,8 +32,13 @@ export default function TeamGeneralSettings() {
   const members = useListTeamMembersTeamsTeamIdMembersGet(team?.id ?? 0, {
     query: { enabled: Boolean(team) },
   })
-  const isAdmin =
+  const isTeamAdmin =
     members.data?.some((m) => m.user.id === user?.id && m.role === 'admin') ?? false
+  // An archived team (#322) takes no changes but being unarchived: its
+  // settings read as they are, for its admins too.
+  const isAdmin = isTeamAdmin && !isArchived(team)
+  // Archiving, unarchiving and deleting: its admins, and site admins (#307).
+  const mayArchive = isTeamAdmin || Boolean(user?.is_site_admin)
 
   if (isLoading) return <Loading />
   if (!team) {
@@ -41,6 +54,8 @@ export default function TeamGeneralSettings() {
   return (
     <div className="space-y-4">
       <TeamGeneralForm key={team.id} team={team} isAdmin={isAdmin} />
+      {/* Below what the team is called (#322), as the mockup has it. */}
+      {mayArchive && <ArchiveSection key={`archive-${team.id}`} team={team} />}
       <Findable key={`findable-${team.id}`} team={team} isAdmin={isAdmin} />
       <GuestsMayComment
         key={`guests-${team.id}`}
@@ -558,5 +573,273 @@ function TeamGeneralForm({ team, isAdmin }: { team: TeamRead; isAdmin: boolean }
         </div>
       )}
     </form>
+  )
+}
+
+/**
+ * Archive the team, or unarchive it; and delete it, only when it has no
+ * tickets (#322). A team with work in it is archived: read-only, out of the
+ * switcher, pickers and search, and everything still there.
+ */
+function ArchiveSection({ team }: { team: TeamRead }) {
+  const { t } = useTranslation(['settings', 'common'])
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const id = useId()
+  const archived = isArchived(team)
+  const preview = useArchivePreviewTeamsTeamIdArchivePreviewGet(team.id)
+  const updateTeam = useUpdateTeamTeamsTeamIdPatch()
+  const remove = useDeleteTeamTeamsTeamIdDelete()
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const tickets = preview.data?.tickets
+  const empty = tickets === 0
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['/teams'] }),
+      queryClient.invalidateQueries({
+        queryKey: getArchivePreviewTeamsTeamIdArchivePreviewGetQueryKey(team.id),
+      }),
+      queryClient.invalidateQueries({ queryKey: ['/admin/teams'] }),
+    ])
+  }
+
+  const setArchived = async (value: boolean) => {
+    setError(null)
+    try {
+      await updateTeam.mutateAsync({ teamId: team.id, data: { archived: value } })
+      await refresh()
+      setConfirming(false)
+    } catch (err: unknown) {
+      setError(errorDetail(err, t(value ? 'general.errors.archive' : 'general.errors.unarchive')))
+    }
+  }
+
+  const onDelete = async () => {
+    if (!window.confirm(t('general.archive.deleteConfirm', { team: team.name }))) return
+    setError(null)
+    try {
+      await remove.mutateAsync({ teamId: team.id })
+      // Where to go next: a team still in use, or the page for somebody on
+      // none. Read before the list is refreshed, which no longer has it.
+      const teams = queryClient.getQueryData<TeamRead[]>(['/teams']) ?? []
+      const next = activeTeams(teams).find((other) => other.id !== team.id)
+      queryClient.setQueryData<TeamRead[]>(['/teams'], (current) =>
+        (current ?? []).filter((other) => other.id !== team.id),
+      )
+      void queryClient.invalidateQueries({ queryKey: ['/teams'] })
+      void queryClient.invalidateQueries({ queryKey: ['/admin/teams'] })
+      navigate(next ? `/${next.key}` : '/', { replace: true })
+    } catch (err: unknown) {
+      setError(errorDetail(err, t('general.errors.delete')))
+    }
+  }
+
+  const archivedOn = team.archived_at
+    ? formatDate(parseServerDate(team.archived_at), t('general.archive.datePattern'))
+    : ''
+
+  return (
+    <section className="glass-strong rounded-panel p-6" aria-labelledby={`${id}-heading`}>
+      <p id={`${id}-heading`} className="eyebrow">
+        {t('general.archive.heading')}
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 max-w-prose">
+          <p className="text-sm font-medium text-neutral-800">
+            {t(archived ? 'general.archive.unarchiveTitle' : 'general.archive.archiveTitle', {
+              team: team.name,
+            })}
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {archived ? (
+              t('general.archive.unarchiveHint', { date: archivedOn })
+            ) : (
+              <Trans
+                t={t}
+                i18nKey="general.archive.archiveHint"
+                values={{ key: team.key }}
+                {...userText}
+                components={{ code: <code className="identifier" /> }}
+              />
+            )}
+          </p>
+        </div>
+        {archived ? (
+          <button
+            type="button"
+            onClick={() => void setArchived(false)}
+            disabled={updateTeam.isPending}
+            className="btn btn-secondary btn-sm shrink-0"
+          >
+            {updateTeam.isPending
+              ? t('general.archive.unarchiving')
+              : t('general.archive.unarchiveButton')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="btn btn-secondary btn-sm shrink-0 text-danger-600"
+          >
+            {t('general.archive.archiveButton')}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-neutral-900/8 pt-4">
+        <div className="min-w-0 max-w-prose">
+          <p className="text-sm text-neutral-600">
+            {t('general.archive.deleteTitle', { team: team.name })}
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {tickets === undefined
+              ? '\u00a0'
+              : empty
+                ? t('general.archive.deleteHintEmpty', { team: team.name })
+                : t('general.archive.deleteHint', {
+                    team: team.name,
+                    count: tickets,
+                  })}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void onDelete()}
+          disabled={!empty || remove.isPending}
+          className={`btn btn-sm shrink-0 ${empty ? 'btn-danger' : 'btn-secondary'}`}
+        >
+          {remove.isPending ? t('general.archive.deleting') : t('general.archive.deleteButton')}
+        </button>
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-3 rounded-control bg-danger-50 px-3 py-2 text-sm text-danger-700">
+          {error}
+        </p>
+      )}
+
+      {confirming && (
+        <ArchiveDialog
+          team={team}
+          preview={preview.data}
+          failed={preview.isError}
+          pending={updateTeam.isPending}
+          error={error}
+          onCancel={() => {
+            setConfirming(false)
+            setError(null)
+          }}
+          onConfirm={() => void setArchived(true)}
+        />
+      )}
+    </section>
+  )
+}
+
+/** Archiving says what stops, before it happens (#322). */
+function ArchiveDialog({
+  team,
+  preview,
+  failed,
+  pending,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  team: TeamRead
+  preview: TeamArchivePreview | undefined
+  failed: boolean
+  pending: boolean
+  error: string | null
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const { t } = useTranslation(['settings', 'common'])
+  const dialogRef = useFocusTrap<HTMLDivElement>()
+  const titleId = useId()
+  const stopping = preview
+    ? stoppingParts(preview, (key, options) => t(key as 'general.archive.dialog.webhooks', options))
+    : []
+
+  // Into the body: the section it opens from is glass, whose backdrop
+  // filter would otherwise hold a fixed overlay inside it.
+  return createPortal(
+    <div
+      className="scrim fixed inset-0 z-30 flex items-start justify-center px-4 pt-[15vh]"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        ref={dialogRef}
+        aria-modal="true"
+        tabIndex={-1}
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel()
+        }}
+        className="pop-in glass-strong w-full max-w-md rounded-panel p-5"
+      >
+        <h2 id={titleId} className="text-base font-semibold tracking-tight text-neutral-900">
+          {t('general.archive.dialog.title', { team: team.name })}
+        </h2>
+        {preview ? (
+          <>
+            <p className="mt-2 text-sm text-neutral-600">
+              {t('general.archive.dialog.body', { count: preview.members })}
+            </p>
+            <div className="mt-4 rounded-control border border-neutral-900/8 bg-neutral-900/[0.03] px-3 py-2.5 text-sm text-neutral-800">
+              <p>{t('general.archive.dialog.stops')}</p>
+              <p className="mt-1.5 text-neutral-700">
+                {stopping.length > 0
+                  ? stopping.join(t('general.archive.dialog.separator'))
+                  : t('general.archive.dialog.nothingStops')}
+              </p>
+            </div>
+            <p className="mt-3 text-xs text-neutral-500">
+              {preview.open_tickets > 0
+                ? t('general.archive.dialog.openTickets', { count: preview.open_tickets })
+                : t('general.archive.dialog.noOpenTickets')}
+            </p>
+          </>
+        ) : failed ? (
+          <p role="alert" className="mt-2 text-sm text-danger-700">
+            {t('general.errors.preview')}
+          </p>
+        ) : (
+          <div className="mt-3">
+            <Loading label={t('general.archive.dialog.loading')} />
+          </div>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            className="mt-3 rounded-control bg-danger-50 px-3 py-2 text-sm text-danger-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="btn btn-ghost btn-sm">
+            {t('common:cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!preview || pending}
+            className="btn btn-danger btn-sm"
+          >
+            {pending ? t('general.archive.dialog.archiving') : t('general.archive.dialog.confirm')}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

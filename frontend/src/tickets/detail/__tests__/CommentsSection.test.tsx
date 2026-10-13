@@ -65,7 +65,13 @@ function renderFeed({
   canComment = true,
   canModerate = false,
   guestOf,
-}: { canComment?: boolean; canModerate?: boolean; guestOf?: string } = {}) {
+  archivedTeam,
+}: {
+  canComment?: boolean
+  canModerate?: boolean
+  guestOf?: string
+  archivedTeam?: string
+} = {}) {
   render(
     // A router, since an author's name is a link to their profile (#126).
     <MemoryRouter>
@@ -80,6 +86,7 @@ function renderFeed({
           canComment={canComment}
           canModerate={canModerate}
           guestOf={guestOf}
+          archivedTeam={archivedTeam}
         />
       </QueryClientProvider>
     </MemoryRouter>,
@@ -192,6 +199,19 @@ describe('the Activity feed', () => {
     // No box that would be refused, and the reason in its place (#244).
     expect(
       screen.getByText('Guests of Engineering read and do not comment. A team admin can change that.'),
+    ).toBeTruthy()
+  })
+
+  it('takes no comment on an archived team, and says why (#322)', () => {
+    mocks.comments.data = { items: [], total: 0 }
+    mocks.events.data = []
+    renderFeed({ canComment: false, archivedTeam: 'Engineering' })
+
+    expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+    expect(
+      screen.getByText(
+        'Engineering is archived, so its conversation is read-only until it is unarchived.',
+      ),
     ).toBeTruthy()
   })
 

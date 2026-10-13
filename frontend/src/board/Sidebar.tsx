@@ -7,6 +7,7 @@ import type { Arrangement } from '@/board/sorting'
 import { MyWorkNavItem } from '@/mywork/MyWorkNavItem'
 import { SprintList } from '@/sprints/SprintList'
 import { useTranslation } from '@/i18n'
+import { isArchived, switchableTeams } from '@/team/archived'
 import { InvitesBanner } from '@/team/InvitesBanner'
 import { pickableProjects } from '@/team/projects'
 import { useTeamContext } from '@/team/useTeamContext'
@@ -57,7 +58,7 @@ export function Sidebar({
   const { pathname } = useLocation()
   const onPeople = pathname.startsWith('/people')
   const { theme, toggle: toggleTheme } = useTheme()
-  const { t } = useTranslation(['board', 'common'])
+  const { t } = useTranslation(['board', 'common', 'team'])
 
   return (
     <aside className="glass-strong flex h-full w-60 flex-col rounded-panel">
@@ -81,9 +82,12 @@ export function Sidebar({
           onChange={(e) => navigate(`/${e.target.value}`)}
           aria-label={t('sidebar.team')}
         >
-          {teams.map((other) => (
+          {/* Not an archived team (#322), unless it is the one open. */}
+          {switchableTeams(teams, team.id).map((other) => (
             <option key={other.id} value={other.key}>
-              {t('sidebar.teamOption', { name: other.name, key: other.key })}
+              {isArchived(other)
+                ? t('team:archived.option', { name: other.name, key: other.key })
+                : t('sidebar.teamOption', { name: other.name, key: other.key })}
             </option>
           ))}
         </Select>

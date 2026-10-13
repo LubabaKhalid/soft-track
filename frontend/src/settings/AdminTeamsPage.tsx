@@ -59,7 +59,13 @@ export default function AdminTeamsPage() {
   const unarchive = useUnarchiveTeamAdminTeamsTeamIdUnarchivePost()
   const remove = useDeleteTeamAdminTeamsTeamIdDelete()
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['/admin/teams'] })
+  // The site admin's own team list too: archiving one they are on takes it
+  // out of their switcher (#322), and deleting one takes it away.
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['/admin/teams'] }),
+      queryClient.invalidateQueries({ queryKey: ['/teams'] }),
+    ])
 
   const act = async (run: () => Promise<unknown>, failure: string) => {
     setError(null)

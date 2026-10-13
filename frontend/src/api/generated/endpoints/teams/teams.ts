@@ -31,6 +31,7 @@ import type {
   JoinRequestRead,
   MyJoinRequest,
   RemoveTeamMemberTeamsTeamIdMembersUserIdDeleteParams,
+  TeamArchivePreview,
   TeamCreate,
   TeamCreationAccess,
   TeamDirectory,
@@ -637,6 +638,9 @@ export function useGetTeamTeamsTeamIdGet<TData = Awaited<ReturnType<typeof getTe
 
 
 /**
+ * Delete a team with no tickets, the trash included (#322): one made to
+ * try the product, or by mistake. Archived or not. Its admins, and site
+ * admins; a team with work in it is archived instead.
  * @summary Delete Team
  */
 export const deleteTeamTeamsTeamIdDelete = (
@@ -770,6 +774,101 @@ export const useUpdateTeamTeamsTeamIdPatch = <TError = HTTPValidationError,
       return useMutation(getUpdateTeamTeamsTeamIdPatchMutationOptions(options), queryClient);
     }
     /**
+ * What archiving the team stops and what it leaves (#322), counted for
+ * the dialog that asks first, and how many tickets keep it from being
+ * deleted. Its admins, and site admins.
+ * @summary Archive Preview
+ */
+export const archivePreviewTeamsTeamIdArchivePreviewGet = (
+    teamId: number,
+ signal?: AbortSignal
+) => {
+
+
+      return apiClient<TeamArchivePreview>(
+      {url: `/teams/${teamId}/archive-preview`, method: 'GET', signal
+    },
+      );
+    }
+
+
+
+
+export const getArchivePreviewTeamsTeamIdArchivePreviewGetQueryKey = (teamId: number,) => {
+    return [
+    `/teams/${teamId}/archive-preview`
+    ] as const;
+    }
+
+
+export const getArchivePreviewTeamsTeamIdArchivePreviewGetQueryOptions = <TData = Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError = HTTPValidationError>(teamId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData>>, }
+) => {
+
+const {query: queryOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getArchivePreviewTeamsTeamIdArchivePreviewGetQueryKey(teamId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>> = ({ signal }) => archivePreviewTeamsTeamIdArchivePreviewGet(teamId, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: teamId !== null && teamId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ArchivePreviewTeamsTeamIdArchivePreviewGetQueryResult = NonNullable<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>>
+export type ArchivePreviewTeamsTeamIdArchivePreviewGetQueryError = HTTPValidationError
+
+
+export function useArchivePreviewTeamsTeamIdArchivePreviewGet<TData = Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError = HTTPValidationError>(
+ teamId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>,
+          TError,
+          Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useArchivePreviewTeamsTeamIdArchivePreviewGet<TData = Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError = HTTPValidationError>(
+ teamId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>,
+          TError,
+          Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>
+        > , 'initialData'
+      >, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useArchivePreviewTeamsTeamIdArchivePreviewGet<TData = Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError = HTTPValidationError>(
+ teamId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Archive Preview
+ */
+
+export function useArchivePreviewTeamsTeamIdArchivePreviewGet<TData = Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError = HTTPValidationError>(
+ teamId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof archivePreviewTeamsTeamIdArchivePreviewGet>>, TError, TData>>, }
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getArchivePreviewTeamsTeamIdArchivePreviewGetQueryOptions(teamId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+/**
  * @summary List Team Members
  */
 export const listTeamMembersTeamsTeamIdMembersGet = (

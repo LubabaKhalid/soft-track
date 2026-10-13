@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 
+import { activeTeams } from '@/team/archived'
 import { NoTeamHome } from '@/team/NoTeamHome'
 import { useMyTeams } from '@/team/useTeams'
 import { Loading } from '@/ui/Loading'
@@ -27,7 +28,9 @@ export default function TeamsHome() {
     )
   }
 
-  if (teams && teams.length > 0) {
+  // A team in use, that is: an archived one (#322) is not where anybody
+  // lands, and somebody on nothing else is on no team in use.
+  if (teams && activeTeams(teams).length > 0) {
     return <Navigate to="/my-work" replace />
   }
 

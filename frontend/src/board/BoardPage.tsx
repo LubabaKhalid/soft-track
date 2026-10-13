@@ -63,6 +63,8 @@ import { PlanView } from '@/sprints/PlanView'
 import { SearchResults } from '@/search/SearchResults'
 import { useDebounced } from '@/search/useDebounced'
 import { rememberTeam } from '@/team/lastTeam'
+import { ArchivedBanner } from '@/team/ArchivedBanner'
+import { activeTeams, isArchived } from '@/team/archived'
 import { canWriteIn } from '@/team/members'
 import { ShellFrame } from '@/team/ShellFrame'
 import { TeamProvider } from '@/team/TeamContext'
@@ -267,9 +269,10 @@ export default function BoardPage() {
     query: { enabled: Boolean(team) && searchQuery.length > 0 },
   })
 
-  // A guest (#104) is offered nothing that writes. The server refuses them
-  // regardless; this only keeps the board from offering what will fail.
-  const canWrite = canWriteIn(teamData.members, user?.id)
+  // A guest (#104) is offered nothing that writes, and nobody is on an
+  // archived team (#322). The server refuses them regardless; this only
+  // keeps the board from offering what will fail.
+  const canWrite = !isArchived(team) && canWriteIn(teamData.members, user?.id)
   const openNewTicketNow = useCallback(() => overlays.open('newTicket'), [overlays])
   const openNewTicket = canWrite ? openNewTicketNow : undefined
   const openNewProjectNow = useCallback(() => overlays.open('newProject'), [overlays])
@@ -365,7 +368,10 @@ export default function BoardPage() {
   }
 
   if (!team) {
-    if (teams.length > 0) return <Navigate to={`/${teams[0].key}`} replace />
+    // The first team in use: an archived one (#322) is opened by its key,
+    // never landed on.
+    const fallback = activeTeams(teams)[0]
+    if (fallback) return <Navigate to={`/${fallback.key}`} replace />
     // The page for somebody on no team (#318), not straight to making one.
     return <Navigate to="/" replace />
   }
@@ -458,7 +464,16 @@ export default function BoardPage() {
               onToggleNotifications={() => overlays.toggle('notifications')}
               onCloseNotifications={() => overlays.close('notifications')}
               onOpenNotifiedTicket={leaveForTicket}
+              archived={isArchived(team)}
             />
+            {/* Read-only since the day it was archived, and the way back for
+                whoever may take it (#322). */}
+            {isArchived(team) && (
+              <ArchivedBanner
+                team={team}
+                mayUnarchive={isTeamAdmin || Boolean(user?.is_site_admin)}
+              />
+            )}
             {selectedSprint && !searchQuery && (
               <SprintBanner
                 sprint={selectedSprint}

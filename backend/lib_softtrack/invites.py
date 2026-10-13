@@ -275,9 +275,15 @@ def _live_invite_or_404(session: Session, token: str) -> TeamInvite:
     # comparison then happens in SQL, where both sides are UTC. SQLite hands
     # rows back with naive datetimes, and comparing one of those to an aware
     # `utcnow()` in Python raises.
+    # An archived team's (#322) is not live either: the team takes nobody
+    # new until it is unarchived, when the invitation works again.
     invite = session.exec(
-        select(TeamInvite).where(
-            TeamInvite.token == token, TeamInvite.expires_at > utcnow()
+        select(TeamInvite)
+        .join(Team, Team.id == TeamInvite.team_id)
+        .where(
+            TeamInvite.token == token,
+            TeamInvite.expires_at > utcnow(),
+            Team.archived_at == None,  # noqa: E711 -- SQL IS NULL
         )
     ).first()
     # Unknown and expired answer identically. Distinguishing them would turn
@@ -374,11 +380,17 @@ def decline_invite(session: Session, current_user: User, token: str) -> None:
 
 
 def list_invites_for_user(session: Session, user: User) -> list[InviteRead]:
-    """Every live invitation addressed to this person, across all teams."""
+    """Every live invitation addressed to this person, across all teams but
+    archived ones."""
     _prune_expired(session)
     invites = session.exec(
         select(TeamInvite)
-        .where(TeamInvite.email == user.email.strip().lower())
+        .join(Team, Team.id == TeamInvite.team_id)
+        .where(
+            TeamInvite.email == user.email.strip().lower(),
+            # Not an archived team's (#322), which takes nobody new.
+            Team.archived_at == None,  # noqa: E711 -- SQL IS NULL
+        )
         .order_by(TeamInvite.created_at)
     ).all()
     return [

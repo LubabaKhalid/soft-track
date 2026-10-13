@@ -10,6 +10,7 @@ from lib_softtrack import outside
 from lib_softtrack.models.teams import (
     EpicRef,
     MyJoinRequest,
+    TeamArchivePreview,
     TeamCreate,
     TeamDirectory,
     TeamDirectoryEntry,
@@ -44,8 +45,10 @@ from lib_softtrack.tables import (
     Worklog,
     Project,
     Repository,
+    RetiredTeamKey,
     SavedView,
     ShareLink,
+    StatusCategory,
     Team,
     TeamInvite,
     TeamJoinRequest,
@@ -157,37 +160,70 @@ def require_team_admin(team_id: int, user: User, session: Session) -> TeamMember
 
 
 def require_team_not_archived(team_id: int, session: Session) -> Team:
-    """Reject mutations on archived teams, regardless of the caller's role."""
+    """Refuse a change to an archived team (#322), whoever is asking.
+
+    An archived team is read-only for everybody on it, admins included; what
+    it still takes is being unarchived, or deleted when it is empty, and
+    those go through `update_team` and `delete_team`. `require_team_writer`
+    and `require_team_commenter` both call this, so a guard built on either
+    cannot leave it out.
+    """
     team = get_team_or_404(team_id, session)
     if team.archived_at is not None:
         raise api_error(
             status_code=403,
             code=ErrorCode.team_read_only,
-            detail="This team is archived, so it can only be restored",
+            detail=f"{team.name} is archived, so it is read-only until it is "
+            "unarchived",
         )
     return team
 
 
-def require_team_writer(team_id: int, user: User, session: Session) -> TeamMember:
-    """Guard writes to a team's contents (#104).
-
-    Admins and members pass; guests do not. Archived teams are read-only,
-    including for admins and members. The PATCH service handles restoration.
-
-    When an operation also references another team in its request body (for
-    example, linking a ticket to a ticket in another team or moving a ticket),
-    call this helper directly for that second team as well. A path dependency
-    can only guard the team identified by the URL.
-    """
-    membership = require_team_member(team_id, user, session)
-    require_team_not_archived(team_id, session)
+def _refuse_guests(membership: TeamMember) -> None:
     if membership.role == TeamRole.guest:
         raise api_error(
             status_code=403,
             code=ErrorCode.team_read_only,
             detail="Guests can view this team but not change it",
         )
+
+
+def require_team_writer(team_id: int, user: User, session: Session) -> TeamMember:
+    """The guard for anything that changes what a team contains (#104).
+
+    Admins and members pass; guests do not, and nobody does on an archived
+    team (#322), which is read-only until it is unarchived.
+
+    Most routes get this from `app_softtrack.guards.team_writer`, which works
+    out the team from the URL before the request body is even parsed. A
+    service calls it directly only when a request reaches a *second* team
+    named in its body -- linking to a ticket elsewhere, or moving a ticket to
+    another team -- because the URL only says which team the request starts
+    from. That second team being archived refuses the request too.
+    """
+    membership = require_team_member(team_id, user, session)
+    require_team_not_archived(team_id, session)
+    _refuse_guests(membership)
     return membership
+
+
+def require_team_keeper(team_id: int, user: User, session: Session) -> None:
+    """The guard for the team itself: its settings, archiving it and deleting
+    it (#322).
+
+    `require_team_writer` without the archived check, because an archived
+    team still takes being unarchived, and being deleted when it is empty;
+    the services decide which of those a request is, from its validated
+    body, and refuse everything else on an archived team. A site admin
+    passes whether or not they are on the team: they archive, unarchive and
+    delete any team from Administration -> Teams (#307), and the team's own
+    settings answer them the same way. What else needs a team admin is the
+    service's to check.
+    """
+    get_team_or_404(team_id, session)
+    if user.is_site_admin:
+        return
+    _refuse_guests(require_team_member(team_id, user, session))
 
 
 def require_team_commenter(team_id: int, user: User, session: Session) -> TeamMember:
@@ -196,12 +232,12 @@ def require_team_commenter(team_id: int, user: User, session: Session) -> TeamMe
     Admins and members pass, like `require_team_writer`. A guest passes too on
     a team that lets its guests comment: they may write, react, attach files
     to their comments and edit or delete their own, and still change nothing
-    else. The services decide what "their own" covers.
+    else. The services decide what "their own" covers. Nobody comments on an
+    archived team (#322).
     """
     membership = require_team_member(team_id, user, session)
-    require_team_not_archived(team_id, session)
+    team = require_team_not_archived(team_id, session)
     if membership.role == TeamRole.guest:
-        team = session.get(Team, team_id)
         if not team.guests_may_comment:
             raise api_error(
                 status_code=403,
@@ -332,15 +368,39 @@ def _active_admin_count(session: Session, team_id: int) -> int:
     ).one()
 
 
-def create_team(session: Session, current_user: User, payload: TeamCreate) -> Team:
-    key = payload.key.upper()
-    existing = session.exec(select(Team).where(Team.key == key)).first()
-    if existing:
+def require_key_free(session: Session, key: str) -> None:
+    """Refuse a key a team holds, or ever gave identifiers under (#322).
+
+    Keys are never given back: an archived team keeps its own, and a deleted
+    one that had tickets leaves it retired (`RetiredTeamKey`). Each answers
+    with its own code, so the form can say which it is.
+    """
+    team = session.exec(select(Team).where(Team.key == key)).first()
+    if team is not None and team.archived_at is not None:
+        raise api_error(
+            status_code=400,
+            code=ErrorCode.team_key_archived,
+            detail=f"{key} belongs to an archived team, and a key is never "
+            "given back.",
+        )
+    if team is not None:
         raise api_error(
             status_code=400,
             code=ErrorCode.team_key_taken,
             detail="Team key already in use",
         )
+    if session.get(RetiredTeamKey, key) is not None:
+        raise api_error(
+            status_code=400,
+            code=ErrorCode.team_key_retired,
+            detail=f"{key} belonged to a deleted team whose tickets used it, "
+            "and a key is never given back.",
+        )
+
+
+def create_team(session: Session, current_user: User, payload: TeamCreate) -> Team:
+    key = payload.key.upper()
+    require_key_free(session, key)
 
     team = Team(name=payload.name, key=key, description=payload.description)
     session.add(team)
@@ -365,13 +425,14 @@ def create_team(session: Session, current_user: User, payload: TeamCreate) -> Te
 
 
 def list_teams_for_user(session: Session, current_user: User) -> list[Team]:
+    """Every team the user is on, archived ones too (#322), each saying
+    whether it is. An archived team is out of the team switcher and the
+    pickers, which leave it out themselves, but its board, its tickets and
+    `ENG-42` still open, and finding it by its key is what lets them."""
     statement = (
         select(Team)
         .join(TeamMember, TeamMember.team_id == Team.id)
-        .where(
-            TeamMember.user_id == current_user.id,
-            Team.archived_at == None,  # noqa: E711 -- SQL comparison
-        )
+        .where(TeamMember.user_id == current_user.id)
     )
     return session.exec(statement).all()
 
@@ -544,38 +605,107 @@ def delete_empty_team(session: Session, team: Team) -> None:
         update(TeamRequest).where(TeamRequest.team_id == team_id).values(team_id=None),
     ):
         session.exec(statement)
+    # Identifiers it gave out are still in commit messages and chat logs,
+    # even with no ticket left to answer to them: its key stays taken.
+    if team.next_ticket_number > 1:
+        session.add(RetiredTeamKey(key=team.key))
     session.delete(team)
     session.commit()
 
 
-def delete_team(session: Session, current_user: User, team_id: int) -> None:
-    """A team admin deletes their own team, if it is empty (#322).
+def _require_admin_or_site_admin(team_id: int, user: User, session: Session) -> None:
+    if not user.is_site_admin:
+        require_team_admin(team_id, user, session)
 
-    An archived team is read-only, so it is unarchived first; a site admin
-    deletes any empty team from Administration -> Teams instead.
-    """
-    team = require_team_not_archived(team_id, session)
-    if not current_user.is_site_admin:
-        require_team_admin(team_id, current_user, session)
+
+def delete_team(session: Session, current_user: User, team_id: int) -> None:
+    """A team admin deletes their own team, or a site admin any team, if it is
+    empty (#322) -- archived or not, the same as Administration -> Teams."""
+    team = get_team_or_404(team_id, session)
+    _require_admin_or_site_admin(team_id, current_user, session)
     delete_empty_team(session, team)
+
+
+def _count(session: Session, statement) -> int:
+    return session.exec(statement).one()
+
+
+def archive_preview(
+    session: Session, current_user: User, team_id: int
+) -> TeamArchivePreview:
+    """What archiving the team stops and what it leaves, for the dialog that
+    asks first (#322); and how many tickets keep it from being deleted."""
+    get_team_or_404(team_id, session)
+    _require_admin_or_site_admin(team_id, current_user, session)
+
+    def counted(table, *where):
+        return _count(
+            session,
+            select(func.count()).select_from(table).where(*where),
+        )
+
+    return TeamArchivePreview(
+        members=counted(TeamMember, TeamMember.team_id == team_id),
+        automation_rules=counted(
+            AutomationRule,
+            AutomationRule.team_id == team_id,
+            AutomationRule.is_enabled == True,  # noqa: E712 -- SQL comparison
+        ),
+        webhooks=counted(
+            OutboundWebhook,
+            OutboundWebhook.team_id == team_id,
+            OutboundWebhook.is_enabled == True,  # noqa: E712 -- SQL comparison
+        ),
+        repository_links=counted(Repository, Repository.team_id == team_id),
+        recurring_tickets=counted(
+            TicketSchedule,
+            TicketSchedule.team_id == team_id,
+            TicketSchedule.paused_at == None,  # noqa: E711 -- SQL IS NULL
+        ),
+        open_tickets=_count(
+            session,
+            select(func.count())
+            .select_from(Ticket)
+            .join(WorkflowStatus, WorkflowStatus.id == Ticket.status_id)
+            .where(
+                Ticket.team_id == team_id,
+                col(WorkflowStatus.category).not_in(
+                    [StatusCategory.done, StatusCategory.cancelled]
+                ),
+            ),
+        ),
+        tickets=_count(
+            session,
+            select(func.count())
+            .select_from(Ticket)
+            .where(Ticket.team_id == team_id)
+            .execution_options(**INCLUDE_TRASHED),
+        ),
+    )
 
 
 def update_team(
     session: Session, current_user: User, team_id: int, payload: TeamUpdate
 ) -> Team:
-    team = get_team_or_404(team_id, session)
-    other_changes = bool(payload.model_dump(exclude_unset=True).keys() - {"archived"})
+    """Change what a team is called and how it works, and archive or unarchive
+    it (#322).
 
-    if team.archived_at is not None:
-        if payload.archived is not False or other_changes:
-            raise api_error(
-                status_code=403,
-                code=ErrorCode.team_read_only,
-                detail="This team is archived, so it can only be restored",
-            )
-        if not current_user.is_site_admin:
-            require_team_admin(team_id, current_user, session)
-    elif not current_user.is_site_admin:
+    Archiving and unarchiving are for its admins and for site admins, who do
+    the same from Administration -> Teams (#307); everything else is for its
+    admins. An archived team takes nothing but being unarchived -- asking for
+    anything else with it is refused, so that unarchiving puts it back
+    exactly as it was -- and asking to archive it again changes nothing,
+    keeping the date it was archived.
+    """
+    team = get_team_or_404(team_id, session)
+    changes = payload.model_dump(exclude_unset=True)
+    archiving_only = set(changes) == {"archived"}
+
+    if archiving_only:
+        _require_admin_or_site_admin(team_id, current_user, session)
+    else:
+        if team.archived_at is not None:
+            require_team_not_archived(team_id, session)
         require_team_admin(team_id, current_user, session)
 
     if payload.name is not None:
@@ -812,7 +942,8 @@ def remove_team_member(
     member_user_id: int,
     reassign_to: Optional[int] = None,
 ) -> None:
-    """Remove someone from a team, or leave it yourself.
+    """Remove someone from a team, or leave it yourself -- not on an archived
+    team (#322).
 
     One function for both because they are the same row and the same guards --
     only who is allowed to ask differs.
@@ -822,19 +953,17 @@ def remove_team_member(
     longer open them. Done and cancelled tickets keep their name: there it
     records who did the work, which is what anybody still wants to know.
     """
-    team = get_team_or_404(team_id, session)
+    get_team_or_404(team_id, session)
 
     leaving = member_user_id == current_user.id
-    if team.archived_at is not None and not leaving:
-        raise api_error(
-            status_code=403,
-            code=ErrorCode.team_read_only,
-            detail="This team is archived, so it can only be restored",
-        )
     if leaving:
         require_team_member(team_id, current_user, session)
     else:
         require_team_admin(team_id, current_user, session)
+    # Nobody leaves or is removed from an archived team (#322) either: their
+    # open tickets would be handed on, and unarchiving would not put it back
+    # as it was.
+    require_team_not_archived(team_id, session)
 
     membership = _membership_or_404(session, team_id, member_user_id)
 

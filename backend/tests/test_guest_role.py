@@ -329,19 +329,10 @@ def test_a_guest_is_refused_by_every_mutating_route(client, world, guest, method
     # No body at all. The guard runs before the body is parsed, so a guest is
     # refused for being a guest, not for sending nothing -- a 422 here would
     # mean the route checks its payload before it checks who is asking.
-    request_kwargs = {}
-    if (method, path) == ("PATCH", "/teams/{team_id}"):
-        request_kwargs["json"] = {"name": "Guest edit attempt"}
-    response = client.request(method, url, headers=guest["headers"], **request_kwargs)
+    response = client.request(method, url, headers=guest["headers"])
 
     assert response.status_code == 403, (method, path, response.text)
-
-    expected_code = (
-        "not_team_admin"
-        if (method, path) == ("PATCH", "/teams/{team_id}")
-        else "team_read_only"
-    )
-    assert response.json()["code"] == expected_code
+    assert response.json()["code"] == "team_read_only"
 
 
 @pytest.mark.parametrize(
@@ -361,10 +352,7 @@ def test_letting_guests_comment_opens_the_conversation_and_nothing_else(
     names = re.findall(r"{(\w+)}", path)
     url = path.format(**{name: world[name] for name in names})
 
-    request_kwargs = {}
-    if (method, path) == ("PATCH", "/teams/{team_id}"):
-        request_kwargs["json"] = {"name": "Guest edit attempt"}
-    response = client.request(method, url, headers=guest["headers"], **request_kwargs)
+    response = client.request(method, url, headers=guest["headers"])
 
     if (method, path) in GUEST_COMMENT_ROUTES:
         # Past the guard: whatever it answers -- the file in `world` is not
@@ -374,12 +362,7 @@ def test_letting_guests_comment_opens_the_conversation_and_nothing_else(
         assert code != "team_read_only", (method, path, body)
     else:
         assert response.status_code == 403, (method, path, response.text)
-        expected_code = (
-            "not_team_admin"
-            if (method, path) == ("PATCH", "/teams/{team_id}")
-            else "team_read_only"
-        )
-        assert response.json()["code"] == expected_code
+        assert response.json()["code"] == "team_read_only"
 
 
 def test_every_comment_route_is_a_real_route():

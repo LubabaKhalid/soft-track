@@ -118,6 +118,12 @@ class ErrorCode(str, enum.Enum):
     email_taken = "email_taken"
     username_taken = "username_taken"
     team_key_taken = "team_key_taken"
+    #: A key an archived team holds (#322): `ENG-42` is in commit messages
+    #: and chat logs, so the key is never given back.
+    team_key_archived = "team_key_archived"
+    #: A key a deleted team had given tickets under (#322), kept for the same
+    #: reason. A team deleted before its first ticket gives its key back.
+    team_key_retired = "team_key_retired"
     status_name_taken = "status_name_taken"
     template_name_taken = "template_name_taken"
     #: Field keys and names are unique on a team, whatever the case (#117).

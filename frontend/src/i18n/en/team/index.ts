@@ -7,6 +7,7 @@ import { labels } from '@/i18n/en/team/labels'
 import { outside } from '@/i18n/en/team/outside'
 import { askForTeam } from '@/i18n/en/team/askForTeam'
 import { directory } from '@/i18n/en/team/directory'
+import { archived } from '@/i18n/en/team/archived'
 
 export const team = {
   invites,
@@ -17,4 +18,5 @@ export const team = {
   outside,
   askForTeam,
   directory,
+  archived,
 } as const

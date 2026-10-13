@@ -14,6 +14,8 @@ import { TimeSection } from '@/tickets/detail/TimeSection'
 import { useTicketAttachments } from '@/tickets/detail/useTicketAttachments'
 import { useTicketEditor } from '@/tickets/detail/useTicketEditor'
 import { PriorityIcon } from '@/tickets/PriorityIcon'
+import { ArchivedBanner } from '@/team/ArchivedBanner'
+import { isArchived } from '@/team/archived'
 import { useCanWrite } from '@/team/useCanWrite'
 import { useTeamContext } from '@/team/useTeamContext'
 import { PersonLink } from '@/people/PersonLink'
@@ -38,7 +40,9 @@ export function TicketDetailBody({ ticketId }: { ticketId: number }) {
   const readOnly = !useCanWrite()
   const { members, team } = useTeamContext()
   // A guest reads, and joins the conversation where the team allows (#244).
-  const canComment = !readOnly || Boolean(team.guests_may_comment)
+  // Nobody does on an archived team (#322).
+  const archived = isArchived(team)
+  const canComment = !archived && (!readOnly || Boolean(team.guests_may_comment))
   const { user } = useAuth()
   // Team admins may delete anybody's comment (#93). The server decides; this
   // only decides whether to offer it.
@@ -48,6 +52,12 @@ export function TicketDetailBody({ ticketId }: { ticketId: number }) {
 
   return (
     <div className="ticket-body">
+      {/* `ENG-42` still opens on an archived team (#322), marked as such. */}
+      {archived && (
+        <div className="px-4 pt-4 sm:px-5">
+          <ArchivedBanner team={team} mayUnarchive={false} compact />
+        </div>
+      )}
       <div className="ticket-body-grid">
         <div className="ticket-body-main">
           {ticket.parent && <SubTicketsSection ticket={ticket} readOnly={readOnly} />}
@@ -146,7 +156,8 @@ export function TicketDetailBody({ ticketId }: { ticketId: number }) {
             onFilesClaimed={files.invalidate}
             canComment={canComment}
             canModerate={isTeamAdmin}
-            guestOf={readOnly ? team.name : undefined}
+            guestOf={readOnly && !archived ? team.name : undefined}
+            archivedTeam={archived ? team.name : undefined}
           />
         </div>
       </div>

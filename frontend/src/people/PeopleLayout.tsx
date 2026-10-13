@@ -8,6 +8,7 @@ import { Sidebar } from '@/board/Sidebar'
 import { DEFAULT_SORT, withSort } from '@/board/sorting'
 import { lastTeamKey } from '@/team/lastTeam'
 import { ShellFrame } from '@/team/ShellFrame'
+import { activeTeams, isArchived } from '@/team/archived'
 import { TeamProvider } from '@/team/TeamContext'
 import { useTeamData } from '@/team/useTeamData'
 import { useTeamByKey } from '@/team/useTeams'
@@ -30,7 +31,9 @@ export type PeopleOutlet = {
 export default function PeopleLayout() {
   const [lastKey] = useState(lastTeamKey)
   const { team: remembered, teams, isLoading } = useTeamByKey(lastKey)
-  const team = remembered ?? teams[0]
+  // Not an archived team (#322): its sidebar is read-only, and its board is
+  // opened by its key rather than landed on.
+  const team = remembered && !isArchived(remembered) ? remembered : activeTeams(teams)[0]
   const teamData = useTeamData(team)
   const { user } = useAuth()
   const navigate = useNavigate()

@@ -20,6 +20,7 @@ import { TicketHeaderActions } from '@/tickets/TicketHeaderActions'
 import { TicketStack } from '@/tickets/TicketStack'
 import { TicketSurfaceContext, ticketPath } from '@/tickets/surface'
 import { useTeamEvents } from '@/realtime/useTeamEvents'
+import { isArchived } from '@/team/archived'
 import { canWriteIn } from '@/team/members'
 import { TeamProvider } from '@/team/TeamContext'
 import { useTeamData } from '@/team/useTeamData'
@@ -76,7 +77,7 @@ export function TicketPage() {
       <Deleted
         team={team}
         number={number}
-        canRestore={canWriteIn(teamData.members, user?.id)}
+        canRestore={!isArchived(team) && canWriteIn(teamData.members, user?.id)}
         onRestored={() => found.refetch()}
       />
     )

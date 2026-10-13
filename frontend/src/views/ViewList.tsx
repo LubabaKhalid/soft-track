@@ -12,6 +12,7 @@ import {
 } from '@/board/filters'
 import { type Arrangement, fromViewSort, sameSort } from '@/board/sorting'
 import { useTranslation } from '@/i18n'
+import { isArchived } from '@/team/archived'
 import { useTeamContext } from '@/team/useTeamContext'
 import { Icon } from '@/ui/Icon'
 import { useSavedViews } from '@/views/useSavedViews'
@@ -133,8 +134,10 @@ function ViewRow({
     sameFilters(filters, fromViewFilters(view.filters))
   const isMine = views.myDefaultId === view.id
   const isTeams = views.teamDefaultId === view.id
-  // Its owner, or an admin tidying up after somebody who left.
-  const canEdit = view.owner.id === user?.id || isAdmin
+  // Its owner, or an admin tidying up after somebody who left -- not on an
+  // archived team (#322). Opening it by default is yours, and stays.
+  const writable = !isArchived(useTeamContext().team)
+  const canEdit = writable && (view.owner.id === user?.id || isAdmin)
 
   const act = async (run: () => Promise<unknown>) => {
     setMenuOpen(false)
@@ -196,7 +199,7 @@ function ViewRow({
               >
                 {isMine ? t('list.stopOpening') : t('list.openByDefault')}
               </MenuItem>
-              {isAdmin && view.is_shared && (
+              {writable && isAdmin && view.is_shared && (
                 <MenuItem
                   onClick={() => act(() => views.makeTeamDefault(isTeams ? null : view.id))}
                 >

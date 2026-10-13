@@ -45,6 +45,7 @@ export function TopBar({
   onToggleNotifications,
   onCloseNotifications,
   onOpenNotifiedTicket,
+  archived = false,
 }: {
   view: BoardView
   onViewChange: (view: BoardView) => void
@@ -52,8 +53,11 @@ export function TopBar({
   onGroupingChange: (grouping: BoardGrouping) => void
   sort: BoardSort
   onSortChange: (sort: BoardSort) => void
-  /** Absent for a guest (#104): the button is not shown. */
+  /** Absent for a guest (#104), and on an archived team (#322): the button
+   *  is not shown. */
   onNewTicket?: () => void
+  /** The team is archived (#322): "View only" says why. */
+  archived?: boolean
   onOpenSidebar: () => void
   search: string
   onSearchChange: (value: string) => void
@@ -216,7 +220,7 @@ export function TopBar({
           <span
             className="chip"
             style={{ ['--chip' as string]: 'var(--color-neutral-500)' }}
-            title={t('topBar.viewOnlyHint')}
+            title={archived ? t('topBar.viewOnlyArchivedHint') : t('topBar.viewOnlyHint')}
           >
             {t('topBar.viewOnly')}
           </span>

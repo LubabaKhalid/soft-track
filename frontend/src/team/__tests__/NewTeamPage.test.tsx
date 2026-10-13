@@ -89,3 +89,36 @@ describe('NewTeamPage where creating a team is left to some (#306)', () => {
     expect(screen.getByRole('button', { name: 'Ask for a team' })).toBeTruthy()
   })
 })
+
+describe('NewTeamPage, a key that stays taken (#322)', () => {
+  it('says so under the Key field, in the mockup’s words', async () => {
+    create.mutateAsync.mockRejectedValue({
+      response: { status: 400, data: { code: 'team_key_archived', detail: 'x' } },
+    })
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/new-team']}>
+          <Routes>
+            <Route path="/new-team" element={<NewTeamPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText('Team name'), 'Engineering')
+    await user.type(screen.getByLabelText(/^Key/), 'eng')
+    await user.click(screen.getByRole('button', { name: 'Create team' }))
+
+    const message = await screen.findByText(
+      'ENG belongs to an archived team, and a key is never given back.',
+    )
+    const key = screen.getByLabelText(/^Key/)
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(key.getAttribute('aria-describedby')).toBe(message.id)
+    // Under the field, not above the form.
+    expect(key.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await user.type(key, 'X')
+    expect(screen.queryByText(/belongs to an archived team/)).toBeNull()
+  })
+})

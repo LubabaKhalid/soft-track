@@ -246,3 +246,17 @@ describe('the ticket page', () => {
     expect(screen.getByRole('link', { name: /Go to your teams/ }).getAttribute('href')).toBe('/')
   })
 })
+
+describe('a ticket on an archived team (#322)', () => {
+  it('still opens by its key, and offers nothing that changes it', () => {
+    const OPS: TeamRead = { id: 6, name: 'Operations', key: 'OPS', created_at: '2026-01-01T00:00:00Z' }
+    const archived = { ...ENG, archived_at: '2026-09-30T10:00:00Z', archived: true }
+    mocks.lookup = { team: archived, teams: [archived, OPS], isLoading: false }
+    renderPage('/ENG/ticket/7')
+
+    expect(screen.getByText('Body for ticket 70')).toBeTruthy()
+    // Watching is yours; moving it, or anything else, is not on offer.
+    expect(screen.getByRole('button', { name: 'Watch' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'More actions' })).toBeNull()
+  })
+})

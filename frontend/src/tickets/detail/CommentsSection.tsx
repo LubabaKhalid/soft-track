@@ -47,6 +47,7 @@ export function CommentsSection({
   canComment = true,
   canModerate = false,
   guestOf,
+  archivedTeam,
 }: {
   ticketId: number
   people: Mentionable[]
@@ -65,6 +66,9 @@ export function CommentsSection({
    * guests, and are told so, or are told why there is no box.
    */
   guestOf?: string
+  /** The team's name when it is archived (#322): nobody comments, and the
+   *  box says why. */
+  archivedTeam?: string
 }) {
   const { t } = useTranslation('tickets')
   const queryClient = useQueryClient()
@@ -141,7 +145,9 @@ export function CommentsSection({
       {!canComment ? (
         <p className="well flex items-start gap-2 rounded-control px-3 py-2 text-xs text-neutral-500">
           <Icon name="lock" size={13} className="mt-px shrink-0" />
-          {t('comments.guest', { team: guestOf ?? '' })}
+          {archivedTeam !== undefined
+            ? t('comments.archived', { team: archivedTeam })
+            : t('comments.guest', { team: guestOf ?? '' })}
         </p>
       ) : (
         <form onSubmit={submit}>

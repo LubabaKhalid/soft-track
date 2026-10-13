@@ -22,7 +22,8 @@ export const errors = {
   // What a team lets you do.
   not_team_member: 'You are not a member of this team.',
   not_team_admin: 'Only an admin of this team can do that.',
-  team_read_only: 'You are a guest on this team: you can see its work but not change it.',
+  team_read_only:
+    'This team is read-only for you: a guest sees its work and does not change it, and an archived team takes no changes until it is unarchived.',
   not_site_admin: 'Only a site administrator can do that.',
   not_finance_admin:
     'Only a finance admin can do that. A site admin can grant finance access from Administration → Users.',
@@ -41,6 +42,10 @@ export const errors = {
   // Every team on the instance (#307).
   already_team_admin: 'They are an admin of this team already.',
   team_not_empty: 'This team has tickets, so it can be archived and not deleted.',
+
+  // Archiving a team (#322): a key is never given back.
+  team_key_archived: 'That key belongs to an archived team, and a key is never given back.',
+  team_key_retired: 'That key was used by a deleted team, and a key is never given back.',
 
   // Finding a team and asking to join it (#259).
   join_request_pending: 'You have asked to join this team already. Withdraw that request to send another.',

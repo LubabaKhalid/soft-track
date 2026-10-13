@@ -7,7 +7,7 @@ import {
   useCreateTeamTeamsPost,
 } from '@/api/generated/endpoints/teams/teams'
 import type { TeamRead } from '@/api/generated/models'
-import { errorDetail } from '@/api/errors'
+import { errorCode, errorDetail } from '@/api/errors'
 import { useAuth } from '@/auth/useAuth'
 import { Trans, userText, useTranslation } from '@/i18n'
 import { AskForTeamCard } from '@/team/AskForTeam'
@@ -28,10 +28,14 @@ export default function NewTeamPage() {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // A key that stays taken (#322): said under the Key field, not above the
+  // form, since the key is what to change.
+  const [keyError, setKeyError] = useState<string | null>(null)
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+    setKeyError(null)
     try {
       const team = await createTeam.mutateAsync({
         data: { name, key: key.toUpperCase() },
@@ -47,7 +51,11 @@ export default function NewTeamPage() {
       void queryClient.invalidateQueries({ queryKey: getListMyTeamsTeamsGetQueryKey() })
       navigate(`/${team.key}`, { replace: true })
     } catch (err: unknown) {
-      setError(errorDetail(err, t('newTeam.error')))
+      const code = errorCode(err)
+      const asked = key.toUpperCase()
+      if (code === 'team_key_archived') setKeyError(t('newTeam.keyArchived', { key: asked }))
+      else if (code === 'team_key_retired') setKeyError(t('newTeam.keyRetired', { key: asked }))
+      else setError(errorDetail(err, t('newTeam.error')))
     }
   }
 
@@ -117,10 +125,22 @@ export default function NewTeamPage() {
                 minLength={2}
                 maxLength={6}
                 value={key}
-                onChange={(e) => setKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
-                className="field identifier uppercase tracking-wide"
+                onChange={(e) => {
+                  setKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))
+                  setKeyError(null)
+                }}
+                aria-invalid={keyError ? true : undefined}
+                aria-describedby={keyError ? 'team-key-error' : undefined}
+                className={`field identifier uppercase tracking-wide ${
+                  keyError ? 'border-danger-500 ring-1 ring-danger-500/40' : ''
+                }`}
                 placeholder={t('newTeam.keyPlaceholder')}
               />
+              {keyError && (
+                <p id="team-key-error" role="alert" className="mt-1.5 text-xs text-danger-600">
+                  {keyError}
+                </p>
+              )}
             </div>
 
             <button

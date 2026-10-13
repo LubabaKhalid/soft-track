@@ -14,7 +14,14 @@ import { NO_FILTERS } from '@/board/filters'
 const mocks = vi.hoisted(() => ({
   user: { id: 1, full_name: 'Tomas Silva', avatar_color: '#123', is_external: false },
   mayCreate: true,
+  current: 1,
 }))
+
+const TEAMS = [
+  { id: 1, key: 'ENG', name: 'Engineering', archived_at: null },
+  { id: 2, key: 'OLD', name: 'Old site', archived_at: '2026-09-30T10:00:00Z' },
+  { id: 3, key: 'OPS', name: 'Operations', archived_at: null },
+]
 
 vi.mock('@/auth/useAuth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/auth/useAuth')>()),
@@ -26,8 +33,8 @@ vi.mock('@/team/useTeams', async (importOriginal) => ({
 }))
 vi.mock('@/team/useTeamContext', () => ({
   useTeamContext: () => ({
-    team: { id: 1, key: 'ENG', name: 'Engineering' },
-    teams: [{ id: 1, key: 'ENG', name: 'Engineering' }],
+    team: TEAMS.find((team) => team.id === mocks.current),
+    teams: TEAMS,
     projects: [],
     sprints: [],
   }),
@@ -54,6 +61,7 @@ function renderSidebar() {
 beforeEach(() => {
   mocks.user = { id: 1, full_name: 'Tomas Silva', avatar_color: '#123', is_external: false }
   mocks.mayCreate = true
+  mocks.current = 1
 })
 
 afterEach(() => {
@@ -76,5 +84,27 @@ describe('Sidebar, New team', () => {
     mocks.user = { ...mocks.user, is_external: true }
     renderSidebar()
     expect(screen.queryByRole('link', { name: 'New team' })).toBeNull()
+  })
+})
+
+describe('Sidebar, the team switcher (#322)', () => {
+  const options = () =>
+    Array.from(screen.getByRole<HTMLSelectElement>('combobox', { name: 'Team' }).options).map(
+      (option) => option.textContent,
+    )
+
+  it('leaves an archived team out', () => {
+    renderSidebar()
+    expect(options()).toEqual(['Engineering · ENG', 'Operations · OPS'])
+  })
+
+  it('keeps the archived team that is open, marked', () => {
+    mocks.current = 2
+    renderSidebar()
+    expect(options()).toEqual([
+      'Engineering · ENG',
+      'Old site · OLD (archived)',
+      'Operations · OPS',
+    ])
   })
 })

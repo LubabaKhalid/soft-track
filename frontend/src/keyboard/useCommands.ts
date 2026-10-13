@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import type { TeamRead, UserMe } from '@/api/generated/models'
 import { useTranslation } from '@/i18n'
 import type { Command } from '@/keyboard/CommandPalette'
+import { activeTeams } from '@/team/archived'
 
 export const BOARD_VIEWS = ['board', 'list', 'calendar', 'roadmap', 'reports', 'plan'] as const
 export type BoardView = (typeof BOARD_VIEWS)[number]
@@ -92,7 +93,9 @@ export function useCommands({
       },
     ]
 
-    for (const candidate of teams) {
+    // Switching team is the team switcher's, which leaves an archived team
+    // out (#322).
+    for (const candidate of activeTeams(teams)) {
       if (candidate.id === team?.id) continue
       list.push({
         id: `team-${candidate.id}`,

@@ -1,9 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
 from sqlmodel import Session
 
-from app_softtrack.guards import team_writer
+from app_softtrack.guards import team_keeper, team_writer
 from lib_identity.identity import get_current_insider, get_current_user
 from lib_softtrack import joining, team_creation
 from lib_softtrack import teams as teams_service
@@ -22,6 +22,7 @@ from lib_softtrack.models.teams import (
     TeamMemberAdd,
     TeamMemberRead,
     TeamMemberUpdate,
+    TeamArchivePreview,
     TeamRead,
     TeamUpdate,
 )
@@ -30,14 +31,6 @@ from lib_utils.mailer import get_mailer, send_quietly
 from web import get_session
 
 router = APIRouter(prefix="/teams", tags=["teams"])
-
-
-def _require_team_patch_access(
-    request: Request,
-    session: Session = Depends(get_session),
-) -> None:
-    team_id = teams_service.team_id_for_path(session, request.path_params)
-    teams_service.get_team_or_404(team_id, session)
 
 
 @router.post("", response_model=TeamRead)
@@ -117,21 +110,32 @@ def get_team(
     return teams_service.get_team(session, current_user, team_id)
 
 
-@router.delete("/{team_id}", status_code=204, dependencies=[team_writer])
+@router.delete("/{team_id}", status_code=204, dependencies=[team_keeper])
 def delete_team(
     team_id: int,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    """Delete a team with no tickets, the trash included (#322): one made to
+    try the product, or by mistake. Archived or not. Its admins, and site
+    admins; a team with work in it is archived instead."""
     teams_service.delete_team(session, current_user, team_id)
     return Response(status_code=204)
 
 
-@router.patch(
-    "/{team_id}",
-    response_model=TeamRead,
-    dependencies=[Depends(_require_team_patch_access)],
-)
+@router.get("/{team_id}/archive-preview", response_model=TeamArchivePreview)
+def archive_preview(
+    team_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """What archiving the team stops and what it leaves (#322), counted for
+    the dialog that asks first, and how many tickets keep it from being
+    deleted. Its admins, and site admins."""
+    return teams_service.archive_preview(session, current_user, team_id)
+
+
+@router.patch("/{team_id}", response_model=TeamRead, dependencies=[team_keeper])
 def update_team(
     team_id: int,
     payload: TeamUpdate,

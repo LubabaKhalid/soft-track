@@ -66,20 +66,19 @@ def search_tickets(
     if not query:
         return Page(items=[], total=0, limit=limit, offset=offset)
 
-    team_ids = list(
-        session.exec(
-            select(TeamMember.team_id)
-            .join(Team, Team.id == TeamMember.team_id)
-            .where(
-                TeamMember.user_id == current_user.id,
-                Team.archived_at == None,  # noqa: E711 -- SQL comparison
-            )
-        ).all()
-    )
+    mine = session.exec(
+        select(TeamMember.team_id, Team.archived_at)
+        .join(Team, Team.id == TeamMember.team_id)
+        .where(TeamMember.user_id == current_user.id)
+    ).all()
     if team_id is not None:
         # Narrowing to one team can only remove teams from the visible set,
-        # never add one.
-        team_ids = [tid for tid in team_ids if tid == team_id]
+        # never add one. Narrowed to an archived team (#322), its tickets are
+        # found: they are still history somebody may be looking for.
+        team_ids = [tid for tid, _ in mine if tid == team_id]
+    else:
+        # Across every team, an archived one is left out by default.
+        team_ids = [tid for tid, archived_at in mine if archived_at is None]
     if not team_ids:
         return Page(items=[], total=0, limit=limit, offset=offset)
 

@@ -52,6 +52,7 @@ from lib_softtrack.tables import (
     AutomationTrigger,
     Comment,
     Sprint,
+    Team,
     Ticket,
     TicketLabelLink,
     Label,
@@ -187,7 +188,13 @@ def _dispatch(
     Rows are added to whatever transaction is open rather than committed here.
     The change a rule makes and the change that set it off belong to the same
     request, and half of them landing would be worse than neither.
+
+    Nothing runs on an archived team (#322). Nothing on one changes either,
+    but a rule is the kind of thing that would act on its own if it did.
     """
+    team = session.get(Team, team_id)
+    if team is None or team.archived_at is not None:
+        return
     rules = session.exec(
         select(AutomationRule)
         .where(

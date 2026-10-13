@@ -117,7 +117,7 @@ describe('MoveTicketModal', () => {
       error: { response: { data: { code: 'team_read_only', detail: 'x' } } },
     }
     renderModal()
-    expect(screen.getByRole('alert').textContent).toMatch(/guest on this team/)
+    expect(screen.getByRole('alert').textContent).toMatch(/a guest sees its work/)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Move to OPS' }).disabled).toBe(true)
   })
 

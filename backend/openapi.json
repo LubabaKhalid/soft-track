@@ -2274,6 +2274,7 @@
           "teams"
         ],
         "summary": "Delete Team",
+        "description": "Delete a team with no tickets, the trash included (#322): one made to\ntry the product, or by mistake. Archived or not. Its admins, and site\nadmins; a team with work in it is archived instead.",
         "operationId": "delete_team_teams__team_id__delete",
         "security": [
           {
@@ -2346,6 +2347,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TeamRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team_id}/archive-preview": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "summary": "Archive Preview",
+        "description": "What archiving the team stops and what it leaves (#322), counted for\nthe dialog that asks first, and how many tickets keep it from being\ndeleted. Its admins, and site admins.",
+        "operationId": "archive_preview_teams__team_id__archive_preview_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamArchivePreview"
                 }
               }
             }
@@ -24731,6 +24780,50 @@
         "type": "object",
         "title": "StatusUpdate"
       },
+      "TeamArchivePreview": {
+        "properties": {
+          "members": {
+            "type": "integer",
+            "title": "Members"
+          },
+          "automation_rules": {
+            "type": "integer",
+            "title": "Automation Rules"
+          },
+          "webhooks": {
+            "type": "integer",
+            "title": "Webhooks"
+          },
+          "repository_links": {
+            "type": "integer",
+            "title": "Repository Links"
+          },
+          "recurring_tickets": {
+            "type": "integer",
+            "title": "Recurring Tickets"
+          },
+          "open_tickets": {
+            "type": "integer",
+            "title": "Open Tickets"
+          },
+          "tickets": {
+            "type": "integer",
+            "title": "Tickets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "members",
+          "automation_rules",
+          "webhooks",
+          "repository_links",
+          "recurring_tickets",
+          "open_tickets",
+          "tickets"
+        ],
+        "title": "TeamArchivePreview",
+        "description": "What archiving a team stops and what it leaves (#322), counted before\nanything happens, and what keeps it from being deleted instead.\n\nThe four that stop are the ones that would otherwise act on their own:\nenabled automation rules, enabled outgoing webhooks, connected\nrepositories and recurring tickets that are not paused."
+      },
       "TeamCapacity": {
         "properties": {
           "team": {
@@ -28181,6 +28274,11 @@
             "type": "array",
             "title": "Tickets",
             "default": []
+          },
+          "team_archived": {
+            "type": "boolean",
+            "title": "Team Archived",
+            "default": false
           }
         },
         "type": "object",
@@ -28608,6 +28706,8 @@
           "email_taken",
           "username_taken",
           "team_key_taken",
+          "team_key_archived",
+          "team_key_retired",
           "status_name_taken",
           "template_name_taken",
           "custom_field_key_taken",

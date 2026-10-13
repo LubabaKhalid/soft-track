@@ -85,6 +85,28 @@ class TeamUpdate(BaseModel):
     archived: Optional[bool] = None
 
 
+class TeamArchivePreview(BaseModel):
+    """What archiving a team stops and what it leaves (#322), counted before
+    anything happens, and what keeps it from being deleted instead.
+
+    The four that stop are the ones that would otherwise act on their own:
+    enabled automation rules, enabled outgoing webhooks, connected
+    repositories and recurring tickets that are not paused.
+    """
+
+    #: Everybody on the team, guests too: it becomes read-only for all of them.
+    members: int
+    automation_rules: int
+    webhooks: int
+    repository_links: int
+    recurring_tickets: int
+    #: Open tickets, out of the trash: they stay open and assigned.
+    open_tickets: int
+    #: Every ticket, the trash included -- the count `DELETE /teams/{id}`
+    #: needs to be zero.
+    tickets: int
+
+
 class EpicRef(BaseModel):
     """An epic as a roster names it: an outside account's reach (#243)."""
 

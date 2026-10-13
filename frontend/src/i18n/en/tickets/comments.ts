@@ -5,6 +5,8 @@ export const comments = {
   emptyReadOnly: 'No comments yet.',
   // A guest of a team that does not let its guests comment (#244).
   guest: 'Guests of {{team}} read and do not comment. A team admin can change that.',
+  // An archived team (#322).
+  archived: '{{team}} is archived, so its conversation is read-only until it is unarchived.',
   // A guest of a team that does: the one thing that works, and why.
   guestMayComment:
     '<strong>You can comment on this team’s tickets.</strong> Everything else here is read-only for guests.',

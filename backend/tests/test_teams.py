@@ -75,7 +75,9 @@ def test_listing_teams_only_returns_your_own(client, team, auth):
     assert client.get("/teams", headers=outsider["headers"]).json() == []
 
 
-def test_listing_teams_excludes_archived_teams_but_keeps_direct_access(client, team):
+def test_listing_teams_keeps_archived_teams_and_says_so(client, team):
+    """Out of the switcher, which the frontend leaves it out of, and still
+    found by its key: its board and `ARC-1` keep opening (#322)."""
     archived_team = client.post(
         "/teams",
         json={"name": "Archive Test", "key": "ARC"},
@@ -87,8 +89,12 @@ def test_listing_teams_excludes_archived_teams_but_keeps_direct_access(client, t
         headers=team["headers"],
     )
 
-    teams = client.get("/teams", headers=team["headers"]).json()
-    assert [t["id"] for t in teams] == [team["team"]["id"]]
+    teams = {t["key"]: t for t in client.get("/teams", headers=team["headers"]).json()}
+    assert set(teams) == {"ENG", "ARC"}
+    assert teams["ARC"]["archived"] is True
+    assert teams["ARC"]["archived_at"] is not None
+    assert teams["ENG"]["archived"] is False
+    assert teams["ENG"]["archived_at"] is None
 
     response = client.get(f"/teams/{archived_team['id']}", headers=team["headers"])
     assert response.status_code == 200
@@ -626,7 +632,9 @@ def test_a_team_admin_can_delete_an_empty_team(client, team):
     )
 
 
-def test_a_site_admin_cannot_delete_another_teams_empty_team(client, auth, admin):
+def test_a_site_admin_deletes_another_teams_empty_team(client, auth, admin):
+    """The team's own door answers a site admin as Administration -> Teams
+    does (#307, #322)."""
     owner = auth(email="owner@softtrack.dev", full_name="Owner User")
     team_response = client.post(
         "/teams",
@@ -636,9 +644,8 @@ def test_a_site_admin_cannot_delete_another_teams_empty_team(client, auth, admin
     team_id = team_response.json()["id"]
 
     response = client.delete(f"/teams/{team_id}", headers=admin["headers"])
-    assert response.status_code == 403
-    assert response.json()["code"] == "not_team_member"
-    assert client.get(f"/teams/{team_id}", headers=owner["headers"]).status_code == 200
+    assert response.status_code == 204, response.text
+    assert client.get(f"/teams/{team_id}", headers=owner["headers"]).status_code == 404
 
 
 def test_a_member_cannot_delete_a_team(client, auth):
@@ -720,7 +727,8 @@ def test_a_team_with_a_trashed_ticket_cannot_be_deleted(client, team):
     assert team_response.status_code == 200
 
 
-def test_an_archived_empty_team_cannot_be_deleted(client, team):
+def test_an_archived_empty_team_is_deleted_by_its_admin(client, team):
+    """Both doors agree (#322): empty decides, archived or not."""
     client.patch(
         f"/teams/{team['team']['id']}",
         json={"archived": True},
@@ -728,11 +736,10 @@ def test_an_archived_empty_team_cannot_be_deleted(client, team):
     )
 
     response = client.delete(f"/teams/{team['team']['id']}", headers=team["headers"])
-    assert response.status_code == 403
-    assert response.json()["code"] == "team_read_only"
+    assert response.status_code == 204, response.text
     assert (
         client.get(f"/teams/{team['team']['id']}", headers=team["headers"]).status_code
-        == 200
+        == 404
     )
 
 

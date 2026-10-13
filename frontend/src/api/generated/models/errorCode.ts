@@ -65,6 +65,8 @@ export const ErrorCode = {
   email_taken: 'email_taken',
   username_taken: 'username_taken',
   team_key_taken: 'team_key_taken',
+  team_key_archived: 'team_key_archived',
+  team_key_retired: 'team_key_retired',
   status_name_taken: 'status_name_taken',
   template_name_taken: 'template_name_taken',
   custom_field_key_taken: 'custom_field_key_taken',
