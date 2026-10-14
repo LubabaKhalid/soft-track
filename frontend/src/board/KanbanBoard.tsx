@@ -199,6 +199,7 @@ function Column({
               // Whichever the columns already say is left off the card.
               showStatus={grouping !== 'status'}
               showProject={grouping !== 'project'}
+              showSeverity={grouping !== 'severity'}
             />
           ))}
         </SortableContext>

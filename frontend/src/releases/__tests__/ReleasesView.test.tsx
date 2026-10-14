@@ -189,8 +189,9 @@ describe('the list', () => {
     expect(within(list).getByRole('heading', { name: 'Archived' })).toBeTruthy()
   })
 
-  it('opens on the first release still to come', () => {
-    renderReleases()
+  it('opens on the release coming next, ahead of one with no date yet', () => {
+    // The list puts the undated 1.5.0 first; 1.4.0 is the one due.
+    renderReleases({ releases: [NEXT, CURRENT, SHIPPED] })
     expect(screen.getByRole('heading', { level: 2, name: '1.4.0' })).toBeTruthy()
     expect(mocks.asked.at(-1)).toEqual({ fix_version_id: [CURRENT.id], limit: 200 })
   })
@@ -258,6 +259,9 @@ describe('releasing', () => {
     const user = renderReleases()
     await user.click(screen.getByRole('button', { name: 'Release' }))
     const dialog = screen.getByRole('dialog', { name: 'Release 1.4.0' })
+    // On the body, not inside the release's glass panel, whose
+    // backdrop-filter would clip a fixed overlay to the panel.
+    expect(dialog.parentElement?.parentElement).toBe(document.body)
     expect(within(dialog).getByText('2 tickets', { exact: false })).toBeTruthy()
     expect(
       (within(dialog).getByRole('radio', { name: 'Move them to the next release' }) as HTMLInputElement)

@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { parseServerDate } from '@/api/dates'
 import { errorDetail } from '@/api/errors'
@@ -338,7 +339,9 @@ function RaiseBug({
   const queryClient = useQueryClient()
   const raise = useRaiseBugTestRunCasesRunCaseIdBugPost()
   const { run } = detail
-  return (
+  // Portalled: the run is a glass panel, which would otherwise be the
+  // containing block of the form's fixed overlay and clip it.
+  return createPortal(
     <NewTicketModal
       onClose={onClose}
       prefill={{
@@ -356,6 +359,7 @@ function RaiseBug({
         invalidateRuns(queryClient, team.id)
         invalidateTicketWrites(queryClient, team.id)
       }}
-    />
+    />,
+    document.body,
   )
 }

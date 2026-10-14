@@ -60,8 +60,10 @@ export function OpenBugsChart({ data }: { data: OpenBugsBySeverity }) {
           onMouseMove={(e) => onMove(e, W)}
           onMouseLeave={onLeave}
         >
-          <YAxis max={max} width={W} height={H} ticks={4} />
-          {drawn.map((severity) => (
+          {/* Whole bugs: no more gridlines than there are bugs to count. */}
+          <YAxis max={max} width={W} height={H} ticks={Math.min(4, max)} />
+          {/* Least severe first, so where lines meet the critical one is on top. */}
+          {[...drawn].reverse().map((severity) => (
             <path
               key={severity}
               d={line(severity)}

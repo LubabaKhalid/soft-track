@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useId, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { errorDetail } from '@/api/errors'
 import { useReleaseReleaseReleasesReleaseIdReleasePost } from '@/api/generated/endpoints/releases/releases'
@@ -71,9 +72,11 @@ export function ReleaseDialog({
     }
   }
 
-  return (
+  // Portalled: the release's page is a glass panel, and its backdrop-filter
+  // would make it the containing block of a fixed overlay inside it.
+  return createPortal(
     <div
-      className="scrim fixed inset-0 z-30 flex items-start justify-center px-4 pt-[15vh]"
+      className="scrim fixed inset-0 z-40 flex items-start justify-center px-4 pt-[15vh]"
       onClick={onClose}
     >
       <form
@@ -84,6 +87,12 @@ export function ReleaseDialog({
         aria-labelledby={titleId}
         onSubmit={onSubmit}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation()
+            onClose()
+          }
+        }}
         className="pop-in glass-strong w-full max-w-sm rounded-panel p-5"
       >
         <h2 id={titleId} className="mb-4 text-base font-semibold tracking-tight text-neutral-900">
@@ -178,6 +187,7 @@ export function ReleaseDialog({
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   )
 }

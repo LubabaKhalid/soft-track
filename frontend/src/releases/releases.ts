@@ -16,6 +16,21 @@ export function pickableReleases(
 }
 
 /**
+ * The release that is coming next: the planned one due soonest, then the
+ * planned one made first. What the Releases tab opens on.
+ */
+export function comingRelease(releases: readonly ReleaseRead[]): ReleaseRead | null {
+  const planned = releases.filter((release) => release.state === 'planned')
+  const sorted = [...planned].sort((a, b) => {
+    if (a.target_date && b.target_date) return a.target_date.localeCompare(b.target_date)
+    if (a.target_date) return -1
+    if (b.target_date) return 1
+    return a.id - b.id
+  })
+  return sorted[0] ?? null
+}
+
+/**
  * Where a release's unfinished tickets go by default when it is released:
  * the next planned one -- the soonest target date, then the one made first
  * -- that is not this one. Null when there is none.
@@ -24,16 +39,7 @@ export function nextRelease(
   releases: readonly ReleaseRead[],
   current: ReleaseRead,
 ): ReleaseRead | null {
-  const planned = releases.filter(
-    (release) => release.state === 'planned' && release.id !== current.id,
-  )
-  const sorted = [...planned].sort((a, b) => {
-    if (a.target_date && b.target_date) return a.target_date.localeCompare(b.target_date)
-    if (a.target_date) return -1
-    if (b.target_date) return 1
-    return a.id - b.id
-  })
-  return sorted[0] ?? null
+  return comingRelease(releases.filter((release) => release.id !== current.id))
 }
 
 /** How each state reads, and its colour. Labels are getters over the catalog. */

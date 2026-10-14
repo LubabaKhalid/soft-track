@@ -16,7 +16,12 @@ import { formatDate } from '@/i18n/format'
 import { ReleaseDialog } from '@/releases/ReleaseDialog'
 import { ReleaseFormDialog } from '@/releases/ReleaseFormDialog'
 import { ReleaseNotesDialog } from '@/releases/ReleaseNotesDialog'
-import { invalidateReleases, releaseRatio, releaseStateMeta } from '@/releases/releases'
+import {
+  comingRelease,
+  invalidateReleases,
+  releaseRatio,
+  releaseStateMeta,
+} from '@/releases/releases'
 import { useCanWrite } from '@/team/useCanWrite'
 import { useTeamContext } from '@/team/useTeamContext'
 import { RunBar } from '@/testcases/RunPage'
@@ -47,10 +52,10 @@ export function ReleasesView() {
 
   const active = releases.filter((release) => release.state !== 'archived')
   const archived = releases.filter((release) => release.state === 'archived')
-  // The one chosen, else the first still to come, else the newest.
+  // The one chosen, else the one coming next, else the newest.
   const selected =
     releases.find((release) => release.id === selectedId) ??
-    active.find((release) => release.state === 'planned') ??
+    comingRelease(releases) ??
     releases[0] ??
     null
 
