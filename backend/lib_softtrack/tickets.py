@@ -1042,6 +1042,11 @@ def _delete_rows(session: Session, ticket: Ticket) -> list[str]:
     worklogs_service.delete_for_ticket(session, ticket_id)
     # And its values for the team's own fields (#117).
     custom_fields_service.delete_for_ticket(session, ticket_id)
+    # And the test cases that covered it (#274), which go on without it.
+    # Imported here: cases read tickets.
+    from lib_softtrack.cases import forget_ticket
+
+    forget_ticket(session, ticket_id)
     # And the retrospective action it was made from (#271): the line stays in
     # the retrospective's text, without a ticket beside it.
     for action in session.exec(

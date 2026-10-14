@@ -14,6 +14,7 @@ export const BOARD_VIEWS = [
   'reports',
   'plan',
   'releases',
+  'tests',
 ] as const
 export type BoardView = (typeof BOARD_VIEWS)[number]
 

@@ -27,6 +27,8 @@ TEAM_SCOPED = {
     "project_id",
     "sprint_id",
     "release_id",
+    "case_id",
+    "folder_id",
     "comment_id",
     "attachment_id",
     "link_id",

@@ -136,6 +136,21 @@ class TicketSeverity(str, enum.Enum):
     trivial = "trivial"
 
 
+class TestCaseState(str, enum.Enum):
+    """Where a test case is in its life (#274).
+
+    A draft is still being written, ready is what a run takes, and retired
+    is out of new runs and stays in the old ones it was part of -- a result
+    from March still says what was tested in March.
+    """
+
+    __test__ = False
+
+    draft = "draft"
+    ready = "ready"
+    retired = "retired"
+
+
 #: Where a bug can be found, until a team says otherwise (#273).
 DEFAULT_ENVIRONMENTS: tuple[str, ...] = ("Production", "Staging", "Development")
 
@@ -1072,6 +1087,8 @@ class Team(SQLModel, table=True):
     description: Optional[str] = None
     next_ticket_number: int = Field(default=1)
     next_sprint_number: int = Field(default=1)
+    #: Test cases are numbered per team too (#274): TC-21.
+    next_test_case_number: int = Field(default=1)
     #: The view everyone on this team lands on, unless they have chosen their
     #: own -- see UserDefaultView. Only a shared view may hold it, since a
     #: private one would be invisible to everybody it was defaulted for.
@@ -1363,6 +1380,112 @@ class Release(SQLModel, table=True):
     #: The day it shipped, said when it is released. Kept when it is archived,
     #: so an archived release still says when it went out.
     released_on: Optional[date] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TestFolder(SQLModel, table=True):
+    """A folder of a team's test cases (#274): "Invoices", "Sign-in".
+
+    One level deep, on purpose -- labels cut across folders, and a tree of
+    folders is where a test suite goes to be lost.
+    """
+
+    __test__ = False
+    __table_args__ = (
+        UniqueConstraint("team_id", "name", name="uq_test_folder_team_name"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    name: str
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TestCase(SQLModel, table=True):
+    """How to test something, written down (#274): a title, preconditions,
+    and numbered steps, each with what should happen.
+
+    So that how to test the invoice page is known to more than whoever tested
+    it last. The text is versioned (`TestCaseVersion`): a change to the title,
+    the preconditions or the steps is a new version, and a run records the
+    one it executed.
+    """
+
+    __test__ = False
+    __table_args__ = (
+        Index("ix_testcase_team_number", "team_id", "number", unique=True),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    #: Per team, like a ticket's: TC-21.
+    number: int
+    title: str
+    #: Markdown, with the editor tickets use.
+    preconditions: Optional[str] = None
+    #: `[{"action": "Open Invoices.", "expected": "The list, newest first."}]`,
+    #: in order. A list in a JSON column: a case is read and written whole.
+    steps: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    folder_id: Optional[int] = Field(
+        default=None, foreign_key="testfolder.id", index=True
+    )
+    #: Who keeps it up to date. Somebody on the team.
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    state: TestCaseState = Field(default=TestCaseState.draft, index=True)
+    #: The version its text is at, starting at 1.
+    version: int = Field(default=1)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class TestCaseVersion(SQLModel, table=True):
+    """The text of a test case as it was at one version (#274).
+
+    Written when a case is made and whenever its title, preconditions or
+    steps change -- not its folder, owner, state or labels, which change
+    nothing about what is tested.
+    """
+
+    __test__ = False
+    __table_args__ = (
+        UniqueConstraint("case_id", "version", name="uq_test_case_version"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    case_id: int = Field(foreign_key="testcase.id", index=True)
+    version: int
+    title: str
+    preconditions: Optional[str] = None
+    steps: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    #: What changed, in the words of whoever changed it: "step 3 now names
+    #: the PDF button". Optional.
+    note: Optional[str] = None
+    author_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TestCaseLabel(SQLModel, table=True):
+    """A team label on a test case (#274): labels cut across folders."""
+
+    __test__ = False
+
+    case_id: int = Field(foreign_key="testcase.id", primary_key=True)
+    label_id: int = Field(foreign_key="label.id", primary_key=True, index=True)
+
+
+class TestCaseTicket(SQLModel, table=True):
+    """A ticket a test case covers (#274): a story lists the cases that cover
+    it, and a case the stories it covers. On the same team."""
+
+    __test__ = False
+
+    case_id: int = Field(foreign_key="testcase.id", primary_key=True)
+    ticket_id: int = Field(foreign_key="ticket.id", primary_key=True, index=True)
     created_at: datetime = Field(default_factory=utcnow)
 
 

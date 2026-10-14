@@ -588,6 +588,8 @@ TEAM_TABLES = {
     "teamjoinrequest",
     "teammember",
     "teamrequest",
+    "testcase",
+    "testfolder",
     "ticket",
     "ticketevent",
     "ticketschedule",
@@ -605,6 +607,9 @@ CHILD_TABLES = {
     "schedulerun",
     "sprintaction",
     "sprintcapacity",
+    "testcaselabel",
+    "testcaseticket",
+    "testcaseversion",
     "ticketlabellink",
     "webhookdelivery",
 }
@@ -653,6 +658,11 @@ def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session
         Release,
         Repository,
         ScheduleRun,
+        TestCase,
+        TestCaseLabel,
+        TestCaseTicket,
+        TestCaseVersion,
+        TestFolder,
         ShareLink,
         SprintAction,
         SprintCapacity,
@@ -691,6 +701,16 @@ def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session
     )
     label = add(Label(team_id=team_id, name="ci"))
     release = add(Release(team_id=team_id, name="1.0"))
+    folder = add(TestFolder(team_id=team_id, name="Demo"))
+    case = add(
+        TestCase(
+            team_id=team_id,
+            number=1,
+            title="Demo works",
+            folder_id=folder.id,
+            created_by_id=lena_id,
+        )
+    )
     status = add(
         WorkflowStatus(
             team_id=team_id,
@@ -785,6 +805,12 @@ def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session
         add(GuestEpic(user_id=tomas_id, project_id=project.id)),
         add(SprintAction(sprint_id=sprint.id, ticket_id=elsewhere, text="Demo")),
         add(SprintCapacity(sprint_id=sprint.id, user_id=lena_id)),
+        folder,
+        case,
+        add(TestCaseVersion(case_id=case.id, version=1, title="Demo works")),
+        add(TestCaseLabel(case_id=case.id, label_id=label.id)),
+        # Covering a ticket elsewhere: the case's team owns the link.
+        add(TestCaseTicket(case_id=case.id, ticket_id=elsewhere)),
         add(CustomFieldValue(ticket_id=elsewhere, field_id=field.id, value="x")),
         add(
             Notification(

@@ -242,6 +242,11 @@ def _carry_out(session: Session, move: _Move, target: Team, actor: User) -> str:
     session.add(ticket)
     set_labels(ticket.id, move.label_ids, session)
     custom_fields_service.delete_for_ticket(session, ticket.id)
+    # The old team's test cases no longer cover it (#274): a case covers
+    # tickets on its own team.
+    from lib_softtrack.cases import forget_ticket
+
+    forget_ticket(session, ticket.id)
     session.flush()
 
     # The fields the reports read -- a cleared sprint has to show up on that

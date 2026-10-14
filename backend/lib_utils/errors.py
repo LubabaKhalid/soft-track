@@ -72,6 +72,9 @@ class ErrorCode(str, enum.Enum):
     sprint_not_found = "sprint_not_found"
     #: A version a team ships (#272).
     release_not_found = "release_not_found"
+    #: A team's test cases, and the folders they are kept in (#274).
+    test_case_not_found = "test_case_not_found"
+    test_folder_not_found = "test_folder_not_found"
     status_not_found = "status_not_found"
     label_not_found = "label_not_found"
     #: Restoring or purging something that is not in the trash (#323).
@@ -140,6 +143,10 @@ class ErrorCode(str, enum.Enum):
     label_name_taken = "label_name_taken"
     #: And its release names (#272).
     release_name_taken = "release_name_taken"
+    #: And its test folders' names (#274).
+    test_folder_name_taken = "test_folder_name_taken"
+    #: A test case already covering that ticket (#274).
+    test_case_covers_already = "test_case_covers_already"
     already_member = "already_member"
     #: Appointing an admin of a team who is one already (#307).
     already_team_admin = "already_team_admin"
@@ -190,6 +197,8 @@ class ErrorCode(str, enum.Enum):
     environment_not_on_team = "environment_not_on_team"
     #: A team's list of environments with a repeat, or a blank (#273).
     environments_invalid = "environments_invalid"
+    #: A test-case CSV that cannot be read (#274).
+    test_cases_import_invalid = "test_cases_import_invalid"
     link_to_self = "link_to_self"
     parent_is_self = "parent_is_self"
     parent_other_team = "parent_other_team"

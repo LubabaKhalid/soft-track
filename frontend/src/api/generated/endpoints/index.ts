@@ -33,6 +33,7 @@ export * from './sprints/sprints';
 export * from './statuses/statuses';
 export * from './teams/teams';
 export * from './templates/templates';
+export * from './test-cases/test-cases';
 export * from './tickets/tickets';
 export * from './time-estimates/time-estimates';
 export * from './timesheet/timesheet';

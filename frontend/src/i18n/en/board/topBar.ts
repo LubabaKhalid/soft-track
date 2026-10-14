@@ -10,6 +10,7 @@ export const topBar = {
     reports: 'Reports',
     plan: 'Plan',
     releases: 'Releases',
+    tests: 'Tests',
   },
   groupBy: 'Group by',
   sortBy: 'Sort by',
