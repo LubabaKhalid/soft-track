@@ -8,9 +8,10 @@ import { formatRelative } from '@/i18n/format'
 import { DueBadge } from '@/tickets/DueBadge'
 import { EstimateBadge } from '@/tickets/EstimateBadge'
 import { ProjectBadge } from '@/tickets/TicketCard'
-import { isResolved } from '@/tickets/ticketMeta'
+import { isResolved, severityOf } from '@/tickets/ticketMeta'
 import { TicketTypeIcon } from '@/tickets/TicketTypeIcon'
 import { PriorityIcon } from '@/tickets/PriorityIcon'
+import { SeverityBadge } from '@/tickets/SeverityBadge'
 import { AssigneeAvatar } from '@/tickets/AssigneeAvatar'
 import { isPlainClick, ticketPath, useOpenTicket } from '@/tickets/surface'
 import { isPlainKey } from '@/keyboard/typing'
@@ -42,7 +43,7 @@ export function TicketListView({
   showUpdated?: boolean
 }) {
   const { t } = useTranslation(['board', 'common'])
-  const { projects, releases } = useTeamContext()
+  const { team, projects, releases } = useTeamContext()
 
   if (tickets.length === 0) {
     return (
@@ -53,7 +54,12 @@ export function TicketListView({
   }
 
   if (grouping !== 'status') {
-    const groups = groupTickets(grouping, tickets, { projects, releases }, { includeEmpty: false })
+    const groups = groupTickets(
+      grouping,
+      tickets,
+      { projects, releases, environments: team.environments },
+      { includeEmpty: false },
+    )
     // A range runs down the list as it reads, section by section.
     const order = groups.flatMap((group) => group.tickets.map((ticket) => ticket.id))
     return (
@@ -181,6 +187,8 @@ export function TicketRow({
         {selected && <span className="sr-only">{t('list.selected')}</span>}
         <PriorityIcon priority={ticket.priority} />
         <TicketTypeIcon type={ticket.type} />
+        {/* A bug's severity (#273): a dot here, named, with the word on a card. */}
+        {severityOf(ticket) && <SeverityBadge severity={severityOf(ticket)!} compact />}
         <span className="identifier w-16 shrink-0 text-xs font-medium text-neutral-400">
           {ticket.identifier}
         </span>

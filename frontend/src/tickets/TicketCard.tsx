@@ -7,9 +7,10 @@ import { selectionGesture } from '@/board/selection'
 import { useTranslation } from '@/i18n'
 import { DueBadge } from '@/tickets/DueBadge'
 import { EstimateBadge } from '@/tickets/EstimateBadge'
-import { isResolved } from '@/tickets/ticketMeta'
+import { isResolved, severityOf } from '@/tickets/ticketMeta'
 import { TicketTypeIcon } from '@/tickets/TicketTypeIcon'
 import { PriorityIcon } from '@/tickets/PriorityIcon'
+import { SeverityBadge } from '@/tickets/SeverityBadge'
 import { AssigneeAvatar } from '@/tickets/AssigneeAvatar'
 import { isPlainClick, ticketPath, useOpenTicket } from '@/tickets/surface'
 import { isPlainKey } from '@/keyboard/typing'
@@ -182,6 +183,8 @@ export function TicketCard({
             </span>
           )}
           {ticket.estimate != null && <EstimateBadge points={ticket.estimate} />}
+          {/* How bad, beside how soon (#273): a bug's alone. */}
+          {severityOf(ticket) && <SeverityBadge severity={severityOf(ticket)!} />}
           <PriorityIcon priority={ticket.priority} />
         </div>
       </div>

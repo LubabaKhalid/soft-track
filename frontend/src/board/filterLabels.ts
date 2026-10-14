@@ -13,7 +13,7 @@ import { FILTER_KEYS, MANY_KEYS, withoutFilter, withoutValue } from '@/board/fil
 import { i18n } from '@/i18n'
 import { formatDate } from '@/i18n/format'
 import { DUE_FILTER_LABEL } from '@/tickets/dueDate'
-import { PRIORITY_META, TYPE_META } from '@/tickets/ticketMeta'
+import { PRIORITY_META, SEVERITY_META, TYPE_META } from '@/tickets/ticketMeta'
 
 export { withoutFilter }
 
@@ -74,6 +74,9 @@ const FIELD = {
   hasNo: 'hasNo',
   watching: 'watching',
   release: 'release',
+  severity: 'severity',
+  environment: 'environment',
+  foundIn: 'foundIn',
 } as const satisfies Record<FilterKey, string>
 
 /**
@@ -134,10 +137,16 @@ export function valueName<K extends ManyKey>(
         i18n.t('board:filters.missing.label')
       )
     case 'release':
+    case 'foundIn':
       return (
         (lookups.releases ?? []).find((release) => release.id === value)?.name ??
         i18n.t('board:filters.missing.release')
       )
+    case 'severity':
+      return SEVERITY_META[value as FilterValue<'severity'>].label
+    case 'environment':
+      // A name, which is its own label -- even one the team has taken off.
+      return String(value)
     default:
       return TYPE_META[value as FilterValue<'type'>].label
   }

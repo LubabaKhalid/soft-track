@@ -4,6 +4,7 @@ import type {
   LabelMatch,
   MissingField,
   TicketPriority,
+  TicketSeverity,
   TicketType,
   ListTicketsTeamsTeamIdTicketsGetParams,
   ViewFilters,
@@ -68,6 +69,11 @@ export type BoardFilters = {
   watching: boolean
   /** The release a ticket ships in (#272): its fix version. */
   release: ManyFilter<number>
+  /** A bug's details (#273). Each narrows to bugs, either way round. */
+  severity: ManyFilter<TicketSeverity>
+  environment: ManyFilter<string>
+  /** The release a bug was found in. */
+  foundIn: ManyFilter<number>
 }
 
 /** The filters that take several values, each with a switch to exclude them. */
@@ -79,6 +85,9 @@ export const MANY_KEYS = [
   'type',
   'creator',
   'release',
+  'severity',
+  'environment',
+  'foundIn',
 ] as const
 export type ManyKey = (typeof MANY_KEYS)[number]
 /** The filters that still take one value. */
@@ -109,6 +118,9 @@ export const FILTER_KEYS: readonly FilterKey[] = [
   'creator',
   'watching',
   'release',
+  'severity',
+  'environment',
+  'foundIn',
 ]
 
 /** What "has no" can ask about, in the menu's order. */
@@ -133,11 +145,15 @@ export const NO_FILTERS: BoardFilters = {
   hasNo: [],
   watching: false,
   release: { values: [], exclude: false },
+  severity: { values: [], exclude: false },
+  environment: { values: [], exclude: false },
+  foundIn: { values: [], exclude: false },
 }
 
 const PRIORITY_VALUES: readonly string[] = ['no_priority', 'urgent', 'high', 'medium', 'low']
 const DUE_VALUES: readonly string[] = ['overdue', 'this_week', 'none']
 const TYPE_VALUES: readonly string[] = ['bug', 'task', 'story']
+const SEVERITY_VALUES: readonly string[] = ['critical', 'major', 'minor', 'trivial']
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
@@ -181,6 +197,10 @@ const MANY_URL: { [K in ManyKey]: { key: string; read: (raw: string) => FilterVa
     type: { key: 'type', read: readOneOf<TicketType>(TYPE_VALUES) },
     creator: { key: 'creator', read: (raw) => (raw === 'me' ? 'me' : readNumber(raw)) },
     release: { key: 'release', read: readNumber },
+    severity: { key: 'severity', read: readOneOf<TicketSeverity>(SEVERITY_VALUES) },
+    // A name: any text the team might have called a place it runs.
+    environment: { key: 'environment', read: (raw) => raw.trim() || null },
+    foundIn: { key: 'found_in', read: readNumber },
   }
 
 const WINDOW_VALUES: readonly string[] = WINDOW_ORDER
@@ -268,6 +288,9 @@ export function fromSearchParams(params: URLSearchParams): BoardFilters {
     ),
     watching: params.get(WATCHING_KEY) === '1',
     release: readMany(params, 'release'),
+    severity: readMany(params, 'severity'),
+    environment: readMany(params, 'environment'),
+    foundIn: readMany(params, 'foundIn'),
   }
 }
 
@@ -329,6 +352,9 @@ export function toQueryParams(
   const type = apiMany(filters.type)
   const creator = apiMany(filters.creator)
   const release = apiMany(filters.release)
+  const severity = apiMany(filters.severity)
+  const environment = apiMany(filters.environment)
+  const foundIn = apiMany(filters.foundIn)
   const people = filters.assignee.values.filter((value): value is number => typeof value === 'number')
   const creators = filters.creator.values.filter((value): value is number => typeof value === 'number')
   // Today goes with anything measured from it, so it is the viewer's today.
@@ -364,6 +390,12 @@ export function toQueryParams(
     watching: filters.watching ? true : undefined,
     fix_version_id: release.values,
     fix_version_exclude: release.exclude,
+    severity: severity.values,
+    severity_exclude: severity.exclude,
+    environment: environment.values,
+    environment_exclude: environment.exclude,
+    found_in_id: foundIn.values,
+    found_in_exclude: foundIn.exclude,
     today: fromToday ? today : undefined,
   }
 }
@@ -423,6 +455,12 @@ export function fromViewFilters(filters: ViewFilters): BoardFilters {
       values: filters.fix_version_id ?? [],
       exclude: filters.fix_version_exclude ?? false,
     },
+    severity: { values: filters.severity ?? [], exclude: filters.severity_exclude ?? false },
+    environment: {
+      values: filters.environment ?? [],
+      exclude: filters.environment_exclude ?? false,
+    },
+    foundIn: { values: filters.found_in_id ?? [], exclude: filters.found_in_exclude ?? false },
   }
 }
 
@@ -459,6 +497,12 @@ export function toViewFilters(filters: BoardFilters): ViewFilters {
     watching: filters.watching,
     fix_version_id: filters.release.values,
     fix_version_exclude: live(filters.release),
+    severity: filters.severity.values,
+    severity_exclude: live(filters.severity),
+    environment: filters.environment.values,
+    environment_exclude: live(filters.environment),
+    found_in_id: filters.foundIn.values,
+    found_in_exclude: live(filters.foundIn),
   }
 }
 
@@ -561,6 +605,9 @@ export function sameFilters(a: BoardFilters, b: BoardFilters): boolean {
     sameWhen(a.created, b.created) &&
     sameValues(a.hasNo, b.hasNo) &&
     a.watching === b.watching &&
-    sameMany(a.release, b.release)
+    sameMany(a.release, b.release) &&
+    sameMany(a.severity, b.severity) &&
+    sameMany(a.environment, b.environment) &&
+    sameMany(a.foundIn, b.foundIn)
   )
 }

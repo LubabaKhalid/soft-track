@@ -79,6 +79,12 @@ def view_filters(view: SavedView) -> ViewFilters:
         has_no=view.has_no,
         fix_version_id=view.fix_version_ids,
         fix_version_exclude=view.fix_version_exclude,
+        severity=view.severities,
+        severity_exclude=view.severity_exclude,
+        environment=view.environments,
+        environment_exclude=view.environment_exclude,
+        found_in_id=view.found_in_ids,
+        found_in_exclude=view.found_in_exclude,
     )
 
 
@@ -130,6 +136,12 @@ def _apply_filters(view: SavedView, filters: ViewFilters) -> None:
     view.has_no = [missing.value for missing in filters.has_no]
     view.fix_version_ids = list(filters.fix_version_id)
     view.fix_version_exclude = filters.fix_version_exclude
+    view.severities = [severity.value for severity in filters.severity]
+    view.severity_exclude = filters.severity_exclude
+    view.environments = list(filters.environment)
+    view.environment_exclude = filters.environment_exclude
+    view.found_in_ids = list(filters.found_in_id)
+    view.found_in_exclude = filters.found_in_exclude
 
 
 def _validate_filters(session: Session, team_id: int, filters: ViewFilters) -> None:
@@ -180,13 +192,14 @@ def _validate_filters(session: Session, team_id: int, filters: ViewFilters) -> N
                 code=ErrorCode.not_on_this_team,
                 detail="No such sprint on this team",
             )
-    if filters.fix_version_id:
+    releases = {*filters.fix_version_id, *filters.found_in_id}
+    if releases:
         found = session.exec(
             select(func.count()).where(
-                Release.id.in_(filters.fix_version_id), Release.team_id == team_id
+                Release.id.in_(releases), Release.team_id == team_id
             )
         ).one()
-        if found != len(filters.fix_version_id):
+        if found != len(releases):
             raise api_error(
                 status_code=400,
                 code=ErrorCode.not_on_this_team,

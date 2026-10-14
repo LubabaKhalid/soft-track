@@ -44,6 +44,12 @@ TRACKED: dict[str, TicketEventField] = {
     #: The release it ships in (#272): "moved on from 1.4.0" is something
     #: people ask a ticket's history about.
     "fix_version_id": TicketEventField.fix_version,
+    #: A bug's details (#273). Severity is what the report of open bugs by
+    #: severity replays; where it was found, and since when, is what people
+    #: ask a bug's history.
+    "severity": TicketEventField.severity,
+    "environment": TicketEventField.environment,
+    "found_in_id": TicketEventField.found_in,
 }
 
 
@@ -163,6 +169,7 @@ def _labels(session: Session, events: list[TicketEvent]) -> dict[tuple, str]:
         TicketEventField.sprint: set(),
         TicketEventField.project: set(),
         TicketEventField.fix_version: set(),
+        TicketEventField.found_in: set(),
     }
     for event in events:
         if event.field in ids:
@@ -191,11 +198,12 @@ def _labels(session: Session, events: list[TicketEvent]) -> dict[tuple, str]:
             .execution_options(**INCLUDE_TRASHED)
         ):
             labels[(TicketEventField.project, project.id)] = project.name
-    if ids[TicketEventField.fix_version]:
-        for release in session.exec(
-            select(Release).where(Release.id.in_(ids[TicketEventField.fix_version]))
-        ):
-            labels[(TicketEventField.fix_version, release.id)] = release.name
+    for field in (TicketEventField.fix_version, TicketEventField.found_in):
+        if ids[field]:
+            for release in session.exec(
+                select(Release).where(Release.id.in_(ids[field]))
+            ):
+                labels[(field, release.id)] = release.name
     return labels
 
 

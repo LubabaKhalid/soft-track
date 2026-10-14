@@ -98,6 +98,9 @@ class TicketGrouping(str, enum.Enum):
     project = "project"
     #: One column per release the team ships (#272), and one for no release.
     release = "release"
+    #: How bad a bug is, and where it was found (#273).
+    severity = "severity"
+    environment = "environment"
 
 
 class TicketType(str, enum.Enum):
@@ -117,6 +120,24 @@ class TicketType(str, enum.Enum):
     task = "task"
     #: A change described from the user's side.
     story = "story"
+
+
+class TicketSeverity(str, enum.Enum):
+    """How bad a bug is (#273), worst first.
+
+    Separate from priority, which says how soon: a typo on the pricing page
+    is trivial and urgent. Optional, and only a bug has one -- a ticket made
+    a task keeps the value, unshown and unfiltered, until it is a bug again.
+    """
+
+    critical = "critical"
+    major = "major"
+    minor = "minor"
+    trivial = "trivial"
+
+
+#: Where a bug can be found, until a team says otherwise (#273).
+DEFAULT_ENVIRONMENTS: tuple[str, ...] = ("Production", "Staging", "Development")
 
 
 class CustomFieldKind(str, enum.Enum):
@@ -156,6 +177,9 @@ class TicketSort(str, enum.Enum):
     title = "title"
     #: The board's own order, arranged by hand (part 2).
     rank = "rank"
+    #: Critical first when descending (#273). A ticket with no severity --
+    #: and every ticket that is not a bug -- comes last either way.
+    severity = "severity"
 
 
 class SortDirection(str, enum.Enum):
@@ -269,6 +293,11 @@ class TicketEventField(str, enum.Enum):
     remaining = "remaining"
     #: The release a ticket ships in (#272), as the release's id.
     fix_version = "fix_version"
+    #: A bug's details (#273): how bad, where, and the release it was found
+    #: in, as the release's id.
+    severity = "severity"
+    environment = "environment"
+    found_in = "found_in"
 
 
 class DueFilter(str, enum.Enum):
@@ -1074,6 +1103,13 @@ class Team(SQLModel, table=True):
     #: day. Both shrink with the days somebody is away.
     capacity_points: int = Field(default=10)
     capacity_minutes_per_day: int = Field(default=6 * 60)
+    #: Where the team's bugs are found (#273): production, staging and
+    #: development, and any a team admin adds. A bug's environment is one of
+    #: these, in this spelling.
+    environments: list = Field(
+        default_factory=lambda: list(DEFAULT_ENVIRONMENTS),
+        sa_column=Column(JSONValue, nullable=False),
+    )
     created_at: datetime = Field(default_factory=utcnow)
     #: Whether the team is in the team directory (#259), where people who are
     #: not on it see its name, key, size and admins and can ask to join. On
@@ -1178,6 +1214,15 @@ class Ticket(SQLModel, table=True):
     #: work was done and an epic what it was part of; this says which version
     #: a customer has to be on to have it.
     fix_version_id: Optional[int] = Field(
+        default=None, foreign_key="release.id", index=True
+    )
+    # --- A bug's details (#273): kept when the type changes away, and only
+    # shown, filtered and counted while it is a bug. -----------------------
+    severity: Optional[TicketSeverity] = Field(default=None, index=True)
+    #: One of the team's environments, as the team spells it.
+    environment: Optional[str] = Field(default=None, index=True)
+    #: The release the bug was found in. Its fix version is "fixed in".
+    found_in_id: Optional[int] = Field(
         default=None, foreign_key="release.id", index=True
     )
     #: The identifier this ticket had in the system it was imported from, e.g.
@@ -1751,6 +1796,20 @@ class SavedView(SQLModel, table=True):
         default_factory=list, sa_column=Column(JSONValue, nullable=False)
     )
     fix_version_exclude: bool = Field(default=False)
+    #: A bug's details (#273): `TicketSeverity` values, environment names
+    #: and the release ids it was found in. Each narrows to bugs.
+    severities: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    severity_exclude: bool = Field(default=False)
+    environments: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    environment_exclude: bool = Field(default=False)
+    found_in_ids: list = Field(
+        default_factory=list, sa_column=Column(JSONValue, nullable=False)
+    )
+    found_in_exclude: bool = Field(default=False)
 
     #: Not a filter -- it narrows nothing -- but part of what a view *is*: the
     #: same tickets read very differently by column and by project.

@@ -219,8 +219,20 @@ def _carry_out(session: Session, move: _Move, target: Team, actor: User) -> str:
     ticket.status_id = move.status.id
     ticket.sprint_id = None
     ticket.project_id = None
-    # A release is the old team's, like its sprints (#272).
+    # A release is the old team's, like its sprints (#272) -- and so is the
+    # one a bug was found in (#273). Its environment goes too unless the
+    # target team has one of that name.
     ticket.fix_version_id = None
+    ticket.found_in_id = None
+    if ticket.environment is not None:
+        ticket.environment = next(
+            (
+                name
+                for name in target.environments or []
+                if name.casefold() == ticket.environment.casefold()
+            ),
+            None,
+        )
     if move.clear_assignee:
         ticket.assignee_id = None
     if move.detach_parent:

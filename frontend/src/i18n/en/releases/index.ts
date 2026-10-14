@@ -106,6 +106,8 @@ export const releases = {
     fixVersion: 'Fix version',
     /** What a bug calls its fix version (#273). */
     fixedIn: 'Fixed in',
+    /** The release a bug was found in (#273). */
+    foundIn: 'Found in',
     none: 'No release',
   },
   /** A release's marker on the roadmap: "1.4.0 · 15 Oct". */

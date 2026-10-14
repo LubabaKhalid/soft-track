@@ -60,6 +60,7 @@ from lib_softtrack.tables import (
     WorkflowStatus,
     utcnow,
 )
+from lib_softtrack.bug_details import clean_environments
 from lib_softtrack.trash import INCLUDE_TRASHED
 from lib_utils.errors import ErrorCode, api_error
 
@@ -736,6 +737,8 @@ def update_team(
         team.capacity_points = payload.capacity_points
     if payload.capacity_minutes_per_day is not None:
         team.capacity_minutes_per_day = payload.capacity_minutes_per_day
+    if payload.environments is not None:
+        team.environments = clean_environments(payload.environments)
     if payload.listed is not None:
         team.listed = payload.listed
     if payload.open_to_join is not None:
