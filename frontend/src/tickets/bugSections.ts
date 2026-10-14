@@ -24,3 +24,37 @@ export function descriptionForType(description: string, isBug: boolean): string 
   if (!isBug && description === sections) return ''
   return description
 }
+
+/**
+ * A bug's description from a failed test (#275): the case's steps, up to the
+ * one that failed, as steps to reproduce; what that step should have done as
+ * expected; and the note as actual.
+ */
+export function bugSectionsFrom(
+  steps: ReadonlyArray<{ action: string; expected?: string }>,
+  failedStep?: number | null,
+  note?: string | null,
+): string {
+  const heading = (key: 'steps' | 'expected' | 'actual') =>
+    `## ${i18n.t(`tickets:newTicket.bug.${key}`)}`
+  const upTo = failedStep && failedStep <= steps.length ? failedStep : steps.length
+  const taken = steps.slice(0, upTo)
+  const reproduce = taken.length
+    ? taken.map((step, index) => `${index + 1}. ${step.action}`).join('\n')
+    : '1. '
+  const expected = taken.length ? (taken[taken.length - 1].expected ?? '') : ''
+  return [
+    heading('steps'),
+    '',
+    reproduce,
+    '',
+    heading('expected'),
+    '',
+    expected,
+    '',
+    heading('actual'),
+    '',
+    note ?? '',
+    '',
+  ].join('\n')
+}

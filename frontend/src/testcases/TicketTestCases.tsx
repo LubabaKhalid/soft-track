@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
@@ -6,12 +6,13 @@ import {
   useListFoldersTeamsTeamIdTestFoldersGet,
   useTicketCasesTicketsTicketIdTestCasesGet,
 } from '@/api/generated/endpoints/test-cases/test-cases'
-import type { TicketRead, TicketTestCase } from '@/api/generated/models'
+import type { TicketRead } from '@/api/generated/models'
 import { useAuth } from '@/auth/useAuth'
 import { useTranslation } from '@/i18n'
 import { useTeamContext } from '@/team/useTeamContext'
 import { CaseDetail, CaseStateChip } from '@/testcases/CaseDetail'
 import { CaseEditor } from '@/testcases/CaseEditor'
+import { ResultChip } from '@/testcases/ResultChip'
 import { Icon } from '@/ui/Icon'
 import { useFocusTrap } from '@/ui/useFocusTrap'
 
@@ -24,11 +25,9 @@ import { useFocusTrap } from '@/ui/useFocusTrap'
 export function TicketTestCases({
   ticket,
   readOnly,
-  result,
 }: {
   ticket: TicketRead
   readOnly: boolean
-  result?: (testCase: TicketTestCase) => ReactNode
 }) {
   const { t } = useTranslation('tests')
   const { user } = useAuth()
@@ -74,7 +73,12 @@ export function TicketTestCases({
                   {testCase.identifier}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-neutral-900">{testCase.title}</span>
-                {result ? result(testCase) : <CaseStateChip state={testCase.state} />}
+                {/* The last result of each case in a run (#275). */}
+                {testCase.last_result ? (
+                  <ResultChip result={testCase.last_result} />
+                ) : (
+                  <CaseStateChip state={testCase.state} />
+                )}
               </button>
             </li>
           ))}

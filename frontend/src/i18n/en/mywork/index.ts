@@ -53,6 +53,7 @@ export const mywork = {
       severity: 'severity changed',
       environment: 'environment changed',
       found_in: 'found in changed',
+      test_result: 'a test result',
     },
     title: '{{what}}, {{when}}',
   },

@@ -8,6 +8,7 @@ import {
   useUpdateReleaseReleasesReleaseIdPatch,
 } from '@/api/generated/endpoints/releases/releases'
 import { useListTicketsTeamsTeamIdTicketsGet } from '@/api/generated/endpoints/tickets/tickets'
+import { useListRunsTeamsTeamIdTestRunsGet } from '@/api/generated/endpoints/test-runs/test-runs'
 import type { ReleaseRead, ReleaseState, TicketRead } from '@/api/generated/models'
 import { TicketRow } from '@/board/TicketListView'
 import { useTranslation } from '@/i18n'
@@ -18,6 +19,8 @@ import { ReleaseNotesDialog } from '@/releases/ReleaseNotesDialog'
 import { invalidateReleases, releaseRatio, releaseStateMeta } from '@/releases/releases'
 import { useCanWrite } from '@/team/useCanWrite'
 import { useTeamContext } from '@/team/useTeamContext'
+import { RunBar } from '@/testcases/RunPage'
+import { tallyParts } from '@/testcases/runs'
 import { TicketActionsMenu, type TicketAction } from '@/tickets/detail/TicketActionsMenu'
 import { invalidateTicketWrites } from '@/tickets/invalidateTickets'
 import { Icon } from '@/ui/Icon'
@@ -314,6 +317,7 @@ function ReleasePage({ release, onDeleted }: { release: ReleaseRead; onDeleted: 
             {error}
           </p>
         )}
+        <LatestRun releaseId={release.id} />
       </header>
 
       {tickets.isLoading ? (
@@ -350,6 +354,41 @@ function ReleasePage({ release, onDeleted }: { release: ReleaseRead; onDeleted: 
       {dialog === 'notes' && (
         <ReleaseNotesDialog release={release} onClose={() => setDialog(null)} />
       )}
+    </section>
+  )
+}
+
+/**
+ * The release's latest test run (#275), if it has one: how far it got. It
+ * informs the decision to release, and does not make it -- there is no gate.
+ */
+function LatestRun({ releaseId }: { releaseId: number }) {
+  const { t } = useTranslation('tests')
+  const { team } = useTeamContext()
+  const runs = useListRunsTeamsTeamIdTestRunsGet(team.id, { release_id: releaseId })
+  const run = runs.data?.[0]
+  if (!run) return null
+  const { progress } = run
+  return (
+    <section className="well mt-4 rounded-card px-4 py-3" aria-labelledby={`latest-run-${run.id}`}>
+      <h3 id={`latest-run-${run.id}`} className="eyebrow">
+        {t('runs.release.heading')}
+      </h3>
+      <p className="mt-1.5 text-sm font-medium text-neutral-900">{run.name}</p>
+      <p className="text-xs text-neutral-500">
+        {[t(`runs.states.${run.state}`), run.owner?.full_name, run.environment]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+      <RunBar parts={tallyParts(progress)} total={progress.total} />
+      <p className="identifier mt-1.5 text-[11px] text-neutral-500">
+        {t('runs.release.counts', {
+          passed: progress.passed,
+          failed: progress.failed,
+          blocked: progress.blocked,
+          left: progress.not_run,
+        })}
+      </p>
     </section>
   )
 }

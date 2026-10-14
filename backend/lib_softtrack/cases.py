@@ -59,6 +59,7 @@ from lib_softtrack.tables import (
     TestCaseTicket,
     TestCaseVersion,
     TestFolder,
+    TestRunCase,
     Ticket,
     User,
     WorkflowStatus,
@@ -184,6 +185,12 @@ def _reads(session: Session, cases: list[TestCase]) -> list[TestCaseRead]:
             )
         )
 
+    # Each case's latest result in a run (#275). Imported here: runs read
+    # cases through this module.
+    from lib_softtrack.runs import last_results
+
+    results = last_results(session, ids)
+
     owner_ids = {case.owner_id for case in cases if case.owner_id}
     owners = {
         user.id: UserPublic.model_validate(user)
@@ -209,6 +216,7 @@ def _reads(session: Session, cases: list[TestCase]) -> list[TestCaseRead]:
             version=case.version,
             labels=labels.get(case.id, []),
             covers=covers.get(case.id, []),
+            last_result=results.get(case.id),
             created_at=case.created_at,
             updated_at=case.updated_at,
         )
@@ -509,9 +517,19 @@ def update_case(
 
 
 def delete_case(session: Session, current_user: User, case_id: int) -> None:
-    """Delete a case, with its versions, labels and what it covers."""
+    """Delete a case nobody has run, with its versions, labels and what it
+    covers. One a run executed (#275) is retired instead: its results keep
+    saying what was tested."""
     case = get_case_or_404(session, case_id)
     require_team_member(case.team_id, current_user, session)
+    ran = session.exec(select(func.count()).where(TestRunCase.case_id == case.id)).one()
+    if ran:
+        raise api_error(
+            status_code=409,
+            code=ErrorCode.test_case_has_runs,
+            detail=f"{identifier(case)} has been run, and its results would say "
+            "nothing without it. Retire it instead.",
+        )
     for table in (TestCaseLabel, TestCaseTicket, TestCaseVersion):
         session.exec(delete(table).where(table.case_id == case.id))
     session.flush()
@@ -603,6 +621,9 @@ def ticket_cases(
         )
         .order_by(TestCase.number)
     ).all()
+    from lib_softtrack.runs import last_results
+
+    results = last_results(session, [case.id for case in cases])
     return TicketTestCases(
         uses_test_cases=uses,
         cases=[
@@ -611,6 +632,7 @@ def ticket_cases(
                 identifier=identifier(case),
                 title=case.title,
                 state=case.state,
+                last_result=results.get(case.id),
             )
             for case in cases
         ],

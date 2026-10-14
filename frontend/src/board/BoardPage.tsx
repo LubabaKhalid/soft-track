@@ -63,7 +63,7 @@ import { useTeamEvents } from '@/realtime/useTeamEvents'
 import { ReportsView } from '@/reports/ReportsView'
 import { PlanView } from '@/sprints/PlanView'
 import { ReleasesView } from '@/releases/ReleasesView'
-import { TestsView } from '@/testcases/TestsView'
+import { TestsTab } from '@/testcases/TestsTab'
 import { CaseDialog } from '@/testcases/TicketTestCases'
 import { useSearchCasesTestCasesSearchGet } from '@/api/generated/endpoints/test-cases/test-cases'
 import { SearchResults } from '@/search/SearchResults'
@@ -584,7 +584,7 @@ export default function BoardPage() {
                 ) : view === 'releases' ? (
                   <ReleasesView />
                 ) : view === 'tests' ? (
-                  <TestsView />
+                  <TestsTab />
                 ) : view === 'board' ? (
                   <KanbanBoard
                     tickets={tickets}

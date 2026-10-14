@@ -40,6 +40,7 @@ from lib_softtrack.tables import (
     SavedView,
     StatusCategory,
     Team,
+    TestRun,
     Ticket,
     TicketType,
     User,
@@ -404,6 +405,11 @@ def delete_release(session: Session, current_user: User, release_id: int) -> Non
                 other for other in view.found_in_ids if other != release_id
             ]
             session.add(view)
+
+    # The runs for it (#275) stay, for nothing in particular.
+    from lib_softtrack import runs as runs_service
+
+    runs_service.forget(session, TestRun.release_id, release_id)
 
     for rule in session.exec(
         select(AutomationRule).where(AutomationRule.set_fix_version_id == release_id)

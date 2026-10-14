@@ -75,6 +75,11 @@ class ErrorCode(str, enum.Enum):
     #: A team's test cases, and the folders they are kept in (#274).
     test_case_not_found = "test_case_not_found"
     test_folder_not_found = "test_folder_not_found"
+    #: A run of a team's test cases, one case in it, and a file with a
+    #: result (#275).
+    test_run_not_found = "test_run_not_found"
+    test_run_case_not_found = "test_run_case_not_found"
+    test_result_file_not_found = "test_result_file_not_found"
     status_not_found = "status_not_found"
     label_not_found = "label_not_found"
     #: Restoring or purging something that is not in the trash (#323).
@@ -199,6 +204,15 @@ class ErrorCode(str, enum.Enum):
     environments_invalid = "environments_invalid"
     #: A test-case CSV that cannot be read (#274).
     test_cases_import_invalid = "test_cases_import_invalid"
+    #: Deleting a test case a run has executed: it is retired instead, so
+    #: the results keep saying what was tested (#275).
+    test_case_has_runs = "test_case_has_runs"
+    #: Changing a closed run, whose results are fixed (#275).
+    test_run_closed = "test_run_closed"
+    #: A run with no case to run (#275).
+    test_run_empty = "test_run_empty"
+    #: Raising a bug from a result that is not a failure, or that has one (#275).
+    test_result_not_failed = "test_result_not_failed"
     link_to_self = "link_to_self"
     parent_is_self = "parent_is_self"
     parent_other_team = "parent_other_team"

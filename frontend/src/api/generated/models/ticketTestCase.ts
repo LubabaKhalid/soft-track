@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TestCaseState } from './testCaseState';
+import type { TestResult } from './testResult';
 
 /**
  * A case that covers a ticket, as the ticket lists it.
@@ -15,4 +16,5 @@ export interface TicketTestCase {
   identifier: string;
   title: string;
   state: TestCaseState;
+  last_result?: TestResult | null;
 }

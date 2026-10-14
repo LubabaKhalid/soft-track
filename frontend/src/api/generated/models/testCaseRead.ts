@@ -8,6 +8,7 @@
 import type { CoveredTicket } from './coveredTicket';
 import type { LabelRead } from './labelRead';
 import type { TestCaseState } from './testCaseState';
+import type { TestResult } from './testResult';
 import type { TestStep } from './testStep';
 import type { UserPublic } from './userPublic';
 
@@ -25,6 +26,7 @@ export interface TestCaseRead {
   version: number;
   labels: LabelRead[];
   covers: CoveredTicket[];
+  last_result?: TestResult | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,12 +1,17 @@
 import { keepPreviousData, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useId, useState, useRef } from 'react'
+import { type FormEvent, type ReactNode, useId, useState, useRef } from 'react'
 
 import { errorDetail } from '@/api/errors'
 import { useCreateTicketTeamsTeamIdTicketsPost } from '@/api/generated/endpoints/tickets/tickets'
 import { useListTemplatesTeamsTeamIdTicketTemplatesGet } from '@/api/generated/endpoints/templates/templates'
 import { useSearchSearchGet } from '@/api/generated/endpoints/search/search'
 import { ticketPath } from '@/tickets/surface'
-import { TicketPriority, type TicketSeverity, type TicketType } from '@/api/generated/models'
+import {
+  type TicketCreate,
+  TicketPriority,
+  type TicketSeverity,
+  type TicketType,
+} from '@/api/generated/models'
 import { Trans, userText, useTranslation } from '@/i18n'
 import { formatList } from '@/i18n/format'
 import { AssigneeOptions } from '@/tickets/AssigneeOptions'
@@ -55,7 +60,32 @@ function getSearchPhrase(value: string) {
   return trimmed.split(/\s+/).filter(Boolean).length >= 3 ? trimmed : ''
 }
 
-export function NewTicketModal({ onClose }: { onClose: () => void }) {
+/** What the form starts with, rather than empty: a bug from a failure (#275). */
+export type NewTicketPrefill = {
+  title?: string
+  type?: TicketType
+  description?: string
+  severity?: TicketSeverity | null
+  environment?: string | null
+  foundInId?: number | null
+}
+
+export function NewTicketModal({
+  onClose,
+  prefill,
+  create,
+  context,
+}: {
+  onClose: () => void
+  prefill?: NewTicketPrefill
+  /**
+   * Make the ticket another way than the team's create: a bug raised from a
+   * test result goes through the run, which links the two (#275).
+   */
+  create?: (data: TicketCreate) => Promise<unknown>
+  /** A line above the buttons: what the new ticket will be linked to. */
+  context?: ReactNode
+}) {
   const { t } = useTranslation(['tickets', 'common'])
   const dialogRef = useFocusTrap<HTMLDivElement>()
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -66,8 +96,8 @@ export function NewTicketModal({ onClose }: { onClose: () => void }) {
   const templates = useListTemplatesTeamsTeamIdTicketTemplatesGet(team.id).data ?? []
   const customFields = useCustomFields(team.id)
 
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const [title, setTitle] = useState(prefill?.title ?? '')
+  const [description, setDescription] = useState(prefill?.description ?? '')
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false)
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1)
 
@@ -116,11 +146,13 @@ export function NewTicketModal({ onClose }: { onClose: () => void }) {
   // loads them.
   const [statusId, setStatusId] = useState<string>('')
   const [priority, setPriority] = useState<TicketPriority>(TicketPriority.no_priority)
-  const [type, setType] = useState<TicketType>('task')
+  const [type, setType] = useState<TicketType>(prefill?.type ?? 'task')
   // A bug's details (#273), asked once the type is Bug and sent only then.
-  const [severity, setSeverity] = useState<TicketSeverity | ''>('')
-  const [environment, setEnvironment] = useState('')
-  const [foundInId, setFoundInId] = useState('')
+  const [severity, setSeverity] = useState<TicketSeverity | ''>(prefill?.severity ?? '')
+  const [environment, setEnvironment] = useState(prefill?.environment ?? '')
+  const [foundInId, setFoundInId] = useState(
+    prefill?.foundInId != null ? String(prefill.foundInId) : '',
+  )
   const isBug = type === 'bug'
   const chooseType = (next: TicketType) => {
     setType(next)
@@ -182,30 +214,29 @@ export function NewTicketModal({ onClose }: { onClose: () => void }) {
       .filter((field) => isFilled(fieldValues[field.key]))
       .map((field) => [field.key, fieldValues[field.key]] as const)
     try {
-      await createTicket.mutateAsync({
-        teamId: team.id,
-        data: {
-          title: title.trim(),
-          description: description.trim() || undefined,
-          project_id: projectId ? Number(projectId) : undefined,
-          status_id: statusId ? Number(statusId) : undefined,
-          priority,
-          type,
-          ...(isBug
-            ? {
-                severity: severity || undefined,
-                environment: environment || undefined,
-                found_in_id: foundInId ? Number(foundInId) : undefined,
-              }
-            : {}),
-          estimate,
-          sprint_id: sprintId ? Number(sprintId) : undefined,
-          due_date: dueDate || undefined,
-          assignee_id: assigneeId ? Number(assigneeId) : undefined,
-          label_ids: labelIds,
-          custom_fields: filled.length > 0 ? Object.fromEntries(filled) : undefined,
-        },
-      })
+      const data: TicketCreate = {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        project_id: projectId ? Number(projectId) : undefined,
+        status_id: statusId ? Number(statusId) : undefined,
+        priority,
+        type,
+        ...(isBug
+          ? {
+              severity: severity || undefined,
+              environment: environment || undefined,
+              found_in_id: foundInId ? Number(foundInId) : undefined,
+            }
+          : {}),
+        estimate,
+        sprint_id: sprintId ? Number(sprintId) : undefined,
+        due_date: dueDate || undefined,
+        assignee_id: assigneeId ? Number(assigneeId) : undefined,
+        label_ids: labelIds,
+        custom_fields: filled.length > 0 ? Object.fromEntries(filled) : undefined,
+      }
+      if (create) await create(data)
+      else await createTicket.mutateAsync({ teamId: team.id, data })
       queryClient.invalidateQueries({ queryKey: [`/teams/${team.id}/tickets`] })
       invalidateProjects(queryClient, team.id)
       invalidateReleases(queryClient, team.id)
@@ -633,6 +664,7 @@ export function NewTicketModal({ onClose }: { onClose: () => void }) {
           )}
 
           <div className="hairline flex items-center justify-end gap-2 border-t px-5 py-3">
+            {context && <p className="mr-auto text-xs text-neutral-500">{context}</p>}
             <button type="button" onClick={onClose} className="btn btn-ghost">
               {t('common:cancel')}
             </button>
