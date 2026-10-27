@@ -8136,6 +8136,925 @@
         }
       }
     },
+    "/teams/{team_id}/test-folders": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "List Folders",
+        "description": "A team's folders of test cases (#274), by name, with how many cases\nthat are not retired each holds.",
+        "operationId": "list_folders_teams__team_id__test_folders_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestFolderRead"
+                  },
+                  "title": "Response List Folders Teams  Team Id  Test Folders Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Create Folder",
+        "operationId": "create_folder_teams__team_id__test_folders_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestFolderCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestFolderRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-folders/{folder_id}": {
+      "patch": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Rename Folder",
+        "operationId": "rename_folder_test_folders__folder_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Folder Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestFolderUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestFolderRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Delete Folder",
+        "description": "Delete a folder. Its cases are kept, in no folder.",
+        "operationId": "delete_folder_test_folders__folder_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Folder Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team_id}/test-cases": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "List Cases",
+        "description": "A team's test cases, by number: at most 500 of them.",
+        "operationId": "list_cases_teams__team_id__test_cases_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "folder_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the cases in this folder.",
+              "title": "Folder Id"
+            },
+            "description": "Only the cases in this folder."
+          },
+          {
+            "name": "no_folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only the cases in no folder.",
+              "default": false,
+              "title": "No Folder"
+            },
+            "description": "Only the cases in no folder."
+          },
+          {
+            "name": "label_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only cases with this label.",
+              "title": "Label Id"
+            },
+            "description": "Only cases with this label."
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TestCaseState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only cases in this state.",
+              "title": "State"
+            },
+            "description": "Only cases in this state."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words in the key, title, preconditions or steps.",
+              "title": "Q"
+            },
+            "description": "Words in the key, title, preconditions or steps."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestCaseRead"
+                  },
+                  "title": "Response List Cases Teams  Team Id  Test Cases Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Create Case",
+        "operationId": "create_case_teams__team_id__test_cases_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCaseCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team_id}/test-cases/export": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Export Cases",
+        "description": "Every test case on the team, as CSV: the shape an import reads back.",
+        "operationId": "export_cases_teams__team_id__test_cases_export_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams/{team_id}/test-cases/import": {
+      "post": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Import Cases",
+        "description": "Make test cases of a CSV, a case a row. A dry run by default.",
+        "operationId": "import_cases_teams__team_id__test_cases_import_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_cases_teams__team_id__test_cases_import_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseImport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/search": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Search Cases",
+        "description": "Test cases on the caller's teams that the words find (#274).",
+        "operationId": "search_cases_test_cases_search_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The words to look for.",
+              "title": "Q"
+            },
+            "description": "The words to look for."
+          },
+          {
+            "name": "team_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this team's cases.",
+              "title": "Team Id"
+            },
+            "description": "Only this team's cases."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestCaseHit"
+                  },
+                  "title": "Response Search Cases Test Cases Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/{case_id}": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Get Case",
+        "operationId": "get_case_test_cases__case_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Update Case",
+        "description": "Change a case. A change to its title, preconditions or steps is a new\nversion, kept with who made it.",
+        "operationId": "update_case_test_cases__case_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCaseUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Delete Case",
+        "operationId": "delete_case_test_cases__case_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/{case_id}/versions": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "List Versions",
+        "description": "Every version of a case's text, newest first.",
+        "operationId": "list_versions_test_cases__case_id__versions_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestCaseVersionRead"
+                  },
+                  "title": "Response List Versions Test Cases  Case Id  Versions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/{case_id}/tickets": {
+      "post": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Cover",
+        "description": "Say the case covers a ticket on its team: a story, usually.",
+        "operationId": "cover_test_cases__case_id__tickets_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCaseCover"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/{case_id}/tickets/{ticket_id}": {
+      "delete": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Uncover",
+        "operationId": "uncover_test_cases__case_id__tickets__ticket_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tickets/{ticket_id}/test-cases": {
+      "get": {
+        "tags": [
+          "test cases"
+        ],
+        "summary": "Ticket Cases",
+        "description": "The cases that cover a ticket, and whether its team keeps any.",
+        "operationId": "ticket_cases_tickets__ticket_id__test_cases_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Ticket Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTestCases"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "tags": [
@@ -16635,6 +17554,27 @@
         ],
         "title": "Body_attach_receipt_expenses__expense_id__receipt_put"
       },
+      "Body_import_cases_teams__team_id__test_cases_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "A CSV in the export's shape."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "description": "Report what would happen without writing anything.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_cases_teams__team_id__test_cases_import_post"
+      },
       "Body_import_jira_teams__team_id__import_jira_post": {
         "properties": {
           "file": {
@@ -18118,6 +19058,38 @@
         ],
         "title": "ConnectedIdentity",
         "description": "One provider account that can sign in as the current user.\n\nOnly ever returned for yourself. Which third parties hold a key to an\naccount is the account holder's business, and listing somebody else's\nwould say which services they use."
+      },
+      "CoveredTicket": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "type": {
+            "$ref": "#/components/schemas/TicketType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "type",
+          "status"
+        ],
+        "title": "CoveredTicket",
+        "description": "A ticket a case covers, as the case lists it."
       },
       "CreatedResolvedPoint": {
         "properties": {
@@ -27038,6 +28010,559 @@
         "title": "TeamUpdate",
         "description": "What an admin may change about a team.\n\nNo `key`: identifiers like ENG-42 are already in commit messages, chat\nlogs and browser history, and renaming the prefix would strand every one\nof them. See README."
       },
+      "TestCaseCover": {
+        "properties": {
+          "ticket_id": {
+            "type": "integer",
+            "title": "Ticket Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket_id"
+        ],
+        "title": "TestCaseCover"
+      },
+      "TestCaseCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TestStep"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Steps",
+            "default": []
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestCaseState",
+            "default": "draft"
+          },
+          "label_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Label Ids",
+            "default": []
+          },
+          "ticket_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Ticket Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "TestCaseCreate"
+      },
+      "TestCaseHit": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "team_key": {
+            "type": "string",
+            "title": "Team Key"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestCaseState"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "team_id",
+          "team_key",
+          "identifier",
+          "title",
+          "state"
+        ],
+        "title": "TestCaseHit",
+        "description": "A case that search found (#274)."
+      },
+      "TestCaseImport": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run"
+          },
+          "cases_found": {
+            "type": "integer",
+            "title": "Cases Found"
+          },
+          "cases_created": {
+            "type": "integer",
+            "title": "Cases Created"
+          },
+          "cases_skipped_existing": {
+            "type": "integer",
+            "title": "Cases Skipped Existing"
+          },
+          "folders_created": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Folders Created"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dry_run",
+          "cases_found",
+          "cases_created",
+          "cases_skipped_existing",
+          "folders_created",
+          "warnings"
+        ],
+        "title": "TestCaseImport",
+        "description": "What importing a CSV of test cases did, or would do."
+      },
+      "TestCaseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TestStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestCaseState"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "labels": {
+            "items": {
+              "$ref": "#/components/schemas/LabelRead"
+            },
+            "type": "array",
+            "title": "Labels"
+          },
+          "covers": {
+            "items": {
+              "$ref": "#/components/schemas/CoveredTicket"
+            },
+            "type": "array",
+            "title": "Covers"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "team_id",
+          "number",
+          "identifier",
+          "title",
+          "steps",
+          "state",
+          "version",
+          "labels",
+          "covers",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TestCaseRead"
+      },
+      "TestCaseState": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "ready",
+          "retired"
+        ],
+        "title": "TestCaseState",
+        "description": "Where a test case is in its life (#274).\n\nA draft is still being written, ready is what a run takes, and retired\nis out of new runs and stays in the old ones it was part of -- a result\nfrom March still says what was tested in March."
+      },
+      "TestCaseUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TestStep"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestCaseState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ids"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          }
+        },
+        "type": "object",
+        "title": "TestCaseUpdate",
+        "description": "Every field optional. A change to the title, the preconditions or the\nsteps is a new version, which `change_note` can say something about;\nthe folder, owner, state and labels change no version."
+      },
+      "TestCaseVersionRead": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TestStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "title",
+          "steps",
+          "created_at"
+        ],
+        "title": "TestCaseVersionRead"
+      },
+      "TestFolderCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TestFolderCreate"
+      },
+      "TestFolderRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "team_id",
+          "name",
+          "case_count"
+        ],
+        "title": "TestFolderRead"
+      },
+      "TestFolderUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TestFolderUpdate"
+      },
+      "TestStep": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Action"
+          },
+          "expected": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Expected",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "TestStep",
+        "description": "One numbered step: what to do, and what should happen."
+      },
       "TicketBulkChanges": {
         "properties": {
           "status_id": {
@@ -28082,6 +29607,56 @@
         },
         "type": "object",
         "title": "TicketTemplateUpdate"
+      },
+      "TicketTestCase": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestCaseState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "state"
+        ],
+        "title": "TicketTestCase",
+        "description": "A case that covers a ticket, as the ticket lists it."
+      },
+      "TicketTestCases": {
+        "properties": {
+          "uses_test_cases": {
+            "type": "boolean",
+            "title": "Uses Test Cases"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/TicketTestCase"
+            },
+            "type": "array",
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uses_test_cases",
+          "cases"
+        ],
+        "title": "TicketTestCases",
+        "description": "The cases that cover a ticket (#274), and whether its team keeps test\ncases at all -- which is what decides whether a story with none says so."
       },
       "TicketTime": {
         "properties": {
@@ -30430,6 +32005,8 @@
           "project_not_found",
           "sprint_not_found",
           "release_not_found",
+          "test_case_not_found",
+          "test_folder_not_found",
           "status_not_found",
           "label_not_found",
           "not_in_trash",
@@ -30473,6 +32050,8 @@
           "department_name_taken",
           "label_name_taken",
           "release_name_taken",
+          "test_folder_name_taken",
+          "test_case_covers_already",
           "already_member",
           "already_team_admin",
           "link_exists",
@@ -30500,6 +32079,7 @@
           "bug_details_need_a_bug",
           "environment_not_on_team",
           "environments_invalid",
+          "test_cases_import_invalid",
           "link_to_self",
           "parent_is_self",
           "parent_other_team",

@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 
 import { AXIOS_INSTANCE } from '@/api/client'
+import { invalidateReleases } from '@/releases/releases'
 import { errorDetail } from '@/api/errors'
 import type { ImportReport } from '@/api/generated/models'
 import { Trans, useTranslation } from '@/i18n'
@@ -47,6 +48,9 @@ export function ImportJiraModal({ onClose }: { onClose: () => void }) {
         queryClient.invalidateQueries({ queryKey: [`/teams/${team.id}/tickets`] })
         queryClient.invalidateQueries({ queryKey: [`/teams/${team.id}/labels`] })
         queryClient.invalidateQueries({ queryKey: [`/teams/${team.id}/projects`] })
+        // The releases its versions made, and the environments it added (#272, #273).
+        invalidateReleases(queryClient, team.id)
+        queryClient.invalidateQueries({ queryKey: ['/teams'] })
       }
     } catch (err: unknown) {
       setError(errorDetail(err, t('jira.errors.read')))

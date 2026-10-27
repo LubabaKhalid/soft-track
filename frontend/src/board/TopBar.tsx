@@ -26,6 +26,8 @@ const VIEWS: Array<{ id: BoardView; icon: IconName }> = [
   { id: 'plan', icon: 'users' },
   // The versions a team ships (#272).
   { id: 'releases', icon: 'flag' },
+  // Test cases and runs (#274, #275).
+  { id: 'tests', icon: 'checklist' },
 ]
 
 /**
@@ -33,7 +35,7 @@ const VIEWS: Array<{ id: BoardView; icon: IconName }> = [
  * nothing to filter, arrange, search or export, and their own button for
  * what is new in them in place of New ticket.
  */
-const OWN_SHAPE: readonly BoardView[] = ['releases']
+const OWN_SHAPE: readonly BoardView[] = ['releases', 'tests']
 
 export function TopBar({
   view,
@@ -90,7 +92,10 @@ export function TopBar({
     (item) =>
       !(
         user?.is_external &&
-        (item.id === 'reports' || item.id === 'plan' || item.id === 'releases')
+        (item.id === 'reports' ||
+          item.id === 'plan' ||
+          item.id === 'releases' ||
+          item.id === 'tests')
       ),
   )
   const ownShape = OWN_SHAPE.includes(view)

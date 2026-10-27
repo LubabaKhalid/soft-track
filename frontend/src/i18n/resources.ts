@@ -22,6 +22,7 @@ import { search } from '@/i18n/en/search'
 import { settings } from '@/i18n/en/settings'
 import { sharing } from '@/i18n/en/sharing'
 import { team } from '@/i18n/en/team'
+import { tests } from '@/i18n/en/tests'
 import { ui } from '@/i18n/en/ui'
 import { views } from '@/i18n/en/views'
 
@@ -39,6 +40,7 @@ export const resources = {
     views,
     reports,
     releases,
+    tests,
     sprints,
     automations,
     imports,
