@@ -41,6 +41,7 @@ from app_softtrack.sprints import router as sprints_router
 from app_softtrack.capacity import router as capacity_router
 from app_softtrack.releases import router as releases_router
 from app_softtrack.cases import router as cases_router
+from app_softtrack.runs import router as runs_router
 from app_softtrack.events import router as events_router
 from app_softtrack.imports import router as imports_router
 from app_softtrack.integrations import router as integrations_router
@@ -210,6 +211,7 @@ app.include_router(reports_router)
 app.include_router(imports_router)
 app.include_router(releases_router)
 app.include_router(cases_router)
+app.include_router(runs_router)
 app.include_router(search_router)
 app.include_router(notifications_router)
 app.include_router(views_router)

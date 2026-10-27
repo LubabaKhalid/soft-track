@@ -12,6 +12,7 @@ import { formatNumber } from '@/i18n/format'
 import { shortDue } from '@/tickets/dueDate'
 import { formatDuration } from '@/tickets/duration'
 import { CATEGORY_META, PRIORITY_META, SEVERITY_META } from '@/tickets/ticketMeta'
+import { RESULT_META, type ResultOrNot } from '@/testcases/runs'
 
 /** A history sentence: its catalog key and what fills it, bar the actor. */
 export interface EventSentence {
@@ -37,6 +38,7 @@ type HistoryKey =
   | `field.${'set' | 'changed' | 'cleared' | 'ticked' | 'unticked'}`
   | `trash.${'deleted' | 'restored'}`
   | 'schedule'
+  | `testResult.${'raised' | 'result'}`
   | 'other'
 
 /**
@@ -165,6 +167,22 @@ export function describeEvent(event: TicketEventRead): EventSentence {
       // Into the trash and back out of it (#323). Only a ticket that came
       // back has an Activity feed to show either in.
       return say(to ? 'trash.deleted' : 'trash.restored')
+
+    case 'test_result': {
+      // A result on the bug it raised (#275), written as it was:
+      // `failed|TC-05|1.4.0 regression`. The run's name is last, so a "|"
+      // in it stays in it.
+      const [value, identifier, ...run] = (to ?? '').split('|')
+      const values = { identifier: identifier ?? '', run: run.join('|') }
+      if (value === 'raised') return say('testResult.raised', values)
+      const known = value in RESULT_META
+      return say('testResult.result', {
+        ...values,
+        result: known
+          ? i18n.t(`tickets:history.testResult.results.${value as ResultOrNot}`)
+          : value,
+      })
+    }
 
     case 'schedule':
       // Created by a schedule (#264), named as it was then.

@@ -80,6 +80,19 @@ export const history = {
     deleted: '<actor>{{actor}}</actor> moved this to the trash',
     restored: '<actor>{{actor}}</actor> restored this from the trash',
   },
+  // A test result on the bug it raised (#275).
+  testResult: {
+    raised: '<actor>{{actor}}</actor> raised this from a failure of {{identifier}} in {{run}}',
+    result: '<actor>{{actor}}</actor> marked {{identifier}} {{result}} in {{run}}',
+    /** A result in the middle of that sentence. */
+    results: {
+      passed: 'passed',
+      failed: 'failed',
+      blocked: 'blocked',
+      skipped: 'skipped',
+      not_run: 'not run',
+    },
+  },
   // How a ticket a schedule made begins (#264): nobody did it.
   schedule: 'Created by the schedule <actor>{{name}}</actor>',
   other: '<actor>{{actor}}</actor> changed this',

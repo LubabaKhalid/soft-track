@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from lib_identity.models.identity import UserPublic
 from lib_softtrack.models.labels import LabelRead
 from lib_softtrack.models.statuses import StatusRead
-from lib_softtrack.tables import TestCaseState, TicketType
+from lib_softtrack.tables import TestCaseState, TestResult, TicketType
 
 #: A title: trimmed, and something left after trimming.
 CaseTitle = Annotated[
@@ -115,6 +115,8 @@ class TestCaseRead(BaseModel):
     labels: list[LabelRead]
     #: The tickets it covers.
     covers: list[CoveredTicket]
+    #: Its latest result in a run (#275); null when it has never been run.
+    last_result: Optional[TestResult] = None
     created_at: datetime
     updated_at: datetime
 
@@ -144,6 +146,8 @@ class TicketTestCase(BaseModel):
     identifier: str
     title: str
     state: TestCaseState
+    #: Its latest result in a run (#275).
+    last_result: Optional[TestResult] = None
 
 
 class TicketTestCases(BaseModel):

@@ -590,6 +590,7 @@ TEAM_TABLES = {
     "teamrequest",
     "testcase",
     "testfolder",
+    "testrun",
     "ticket",
     "ticketevent",
     "ticketschedule",
@@ -610,6 +611,7 @@ CHILD_TABLES = {
     "testcaselabel",
     "testcaseticket",
     "testcaseversion",
+    "testruncase",
     "ticketlabellink",
     "webhookdelivery",
 }
@@ -663,6 +665,9 @@ def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session
         TestCaseTicket,
         TestCaseVersion,
         TestFolder,
+        TestResultFile,
+        TestRun,
+        TestRunCase,
         ShareLink,
         SprintAction,
         SprintCapacity,
@@ -811,6 +816,27 @@ def test_deleting_a_team_leaves_nothing_pointing_at_it(client, instance, session
         add(TestCaseLabel(case_id=case.id, label_id=label.id)),
         # Covering a ticket elsewhere: the case's team owns the link.
         add(TestCaseTicket(case_id=case.id, ticket_id=elsewhere)),
+        run := add(
+            TestRun(
+                team_id=team_id,
+                name="Demo run",
+                release_id=release.id,
+                sprint_id=sprint.id,
+                project_id=project.id,
+                created_by_id=lena_id,
+            )
+        ),
+        run_case := add(TestRunCase(run_id=run.id, case_id=case.id, version=1)),
+        add(
+            TestResultFile(
+                run_case_id=run_case.id,
+                filename="shot.png",
+                content_type="image/png",
+                size_bytes=1,
+                storage_key="ab/shot.png",
+                uploaded_by_id=lena_id,
+            )
+        ),
         add(CustomFieldValue(ticket_id=elsewhere, field_id=field.id, value="x")),
         add(
             Notification(

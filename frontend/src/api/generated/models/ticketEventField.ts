@@ -30,4 +30,5 @@ export const TicketEventField = {
   severity: 'severity',
   environment: 'environment',
   found_in: 'found_in',
+  test_result: 'test_result',
 } as const;

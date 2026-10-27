@@ -75,7 +75,46 @@ and `DELETE /test-cases/{case_id}/tickets/{ticket_id}`;
 `GET /teams/{team_id}/test-cases/export` and
 `POST /teams/{team_id}/test-cases/import`.
 
+## Test runs
+
+A **run** is a pass through the cases (#275): that they were run, by whom,
+against what, and what happened. It is for a **release**, a **sprint** or an
+**epic** -- or none -- in one of the team's **environments**, owned by
+somebody, and takes a folder's cases, a label's, and any picked by hand,
+together; retired ones are left out. Each case is copied in at the version of
+its text it is run at, so moving or rewriting a case afterwards does not change
+what a run says was tested.
+
+Cases in a run are **assigned** to people, and each gets a **result**: passed,
+failed, blocked or skipped -- or not run yet -- with a note, files, and the
+step that failed. The run's tally says how many passed, failed, were blocked
+and are not run yet, and how many bugs it raised.
+
+**Raise a bug** on a failure opens the new-ticket form filled in: the case's
+steps up to the one that failed as steps to reproduce, what that step should
+have done as expected, the note as actual, the run's environment, and its
+release as found in. The bug is linked to the stories the case covers, the
+result links to the bug, and the bug's Activity begins with the result that
+raised it and carries that case's later results in that run.
+
+**Close run** when it is finished: its results are fixed (`409
+test_run_closed`), and testing again is a new run. An open run made by mistake
+can be deleted; a closed one is history. A **release's page** shows its latest
+run, a **story** the last result of each case that covers it, and a **case**
+every run it has been in, with the version each executed. A case that has
+been run is retired rather than deleted (`409 test_case_has_runs`).
+
+There is no gate: a run informs the decision to release and never refuses one.
+
+API: `GET` and `POST /teams/{team_id}/test-runs` (filtered by `release_id`,
+`sprint_id` or `project_id`); `GET`, `PATCH` and `DELETE /test-runs/{run_id}`;
+`POST /test-runs/{run_id}/close`; `PATCH /test-run-cases/{run_case_id}`;
+`POST /test-run-cases/{run_case_id}/bug` and `/files`;
+`GET /test-result-files/{result_file_id}/content` and `DELETE
+/test-result-files/{result_file_id}`; `GET /test-cases/{case_id}/runs`.
+
 ## Not here
 
 No results from automated tests: reading a JUnit report from CI into a run is
-a good follow-up. No parameters, and no steps shared between cases.
+a good follow-up. No parameters, no steps shared between cases, and no
+sign-off workflow or release gate.

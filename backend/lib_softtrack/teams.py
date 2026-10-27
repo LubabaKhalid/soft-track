@@ -61,6 +61,9 @@ from lib_softtrack.tables import (
     TestCaseTicket,
     TestCaseVersion,
     TestFolder,
+    TestResultFile,
+    TestRun,
+    TestRunCase,
     User,
     WorkflowStatus,
     utcnow,
@@ -268,6 +271,7 @@ _TEAM_OWNED_BY_PATH = (
     ("sprint_id", Sprint, ErrorCode.sprint_not_found, "Sprint not found"),
     ("release_id", Release, ErrorCode.release_not_found, "Release not found"),
     ("folder_id", TestFolder, ErrorCode.test_folder_not_found, "Folder not found"),
+    ("run_id", TestRun, ErrorCode.test_run_not_found, "Run not found"),
     ("project_id", Project, ErrorCode.project_not_found, "Project not found"),
     ("view_id", SavedView, ErrorCode.view_not_found, "View not found"),
     ("status_id", WorkflowStatus, ErrorCode.status_not_found, "Status not found"),
@@ -338,6 +342,27 @@ def team_id_for_path(session: Session, path_params: Mapping[str, str]) -> int:
                 detail="Time entry not found",
             )
         ids = {"ticket_id": worklog.ticket_id}
+
+    # A file with a test result, and a case in a run (#275): by way of the run.
+    if "result_file_id" in ids:
+        file = session.get(TestResultFile, ids["result_file_id"])
+        if file is None:
+            raise api_error(
+                status_code=404,
+                code=ErrorCode.test_result_file_not_found,
+                detail="File not found",
+            )
+        ids = {"run_case_id": file.run_case_id}
+
+    if "run_case_id" in ids:
+        row = session.get(TestRunCase, ids["run_case_id"])
+        if row is None:
+            raise api_error(
+                status_code=404,
+                code=ErrorCode.test_run_case_not_found,
+                detail="That case is not in a run",
+            )
+        ids = {"run_id": row.run_id}
 
     if "comment_id" in ids:
         comment = session.get(Comment, ids["comment_id"])
@@ -603,6 +628,15 @@ def delete_empty_team(session: Session, team: Team) -> None:
             col(CustomFieldValue.field_id).in_(of_team(CustomField))
         ),
         delete(CustomField).where(CustomField.team_id == team_id),
+        delete(TestResultFile).where(
+            col(TestResultFile.run_case_id).in_(
+                select(TestRunCase.id)
+                .where(col(TestRunCase.run_id).in_(of_team(TestRun)))
+                .scalar_subquery()
+            )
+        ),
+        delete(TestRunCase).where(col(TestRunCase.run_id).in_(of_team(TestRun))),
+        delete(TestRun).where(TestRun.team_id == team_id),
         delete(Sprint).where(Sprint.team_id == team_id),
         delete(TestCaseLabel).where(col(TestCaseLabel.case_id).in_(of_team(TestCase))),
         delete(TestCaseTicket).where(

@@ -9055,6 +9055,669 @@
         }
       }
     },
+    "/teams/{team_id}/test-runs": {
+      "get": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "List Runs",
+        "description": "A team's test runs (#275), newest first, each with its tally.",
+        "operationId": "list_runs_teams__team_id__test_runs_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "release_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only runs for this release.",
+              "title": "Release Id"
+            },
+            "description": "Only runs for this release."
+          },
+          {
+            "name": "sprint_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only runs for this sprint.",
+              "title": "Sprint Id"
+            },
+            "description": "Only runs for this sprint."
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only runs for this epic.",
+              "title": "Project Id"
+            },
+            "description": "Only runs for this epic."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TestRunRead"
+                  },
+                  "title": "Response List Runs Teams  Team Id  Test Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Create Run",
+        "description": "A run of a folder's cases, a label's, those picked, or all three.",
+        "operationId": "create_run_teams__team_id__test_runs_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRunCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Get Run",
+        "operationId": "get_run_test_runs__run_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Update Run",
+        "operationId": "update_run_test_runs__run_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRunUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Delete Run",
+        "description": "Delete an open run made by mistake. A closed one is history.",
+        "operationId": "delete_run_test_runs__run_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-runs/{run_id}/close": {
+      "post": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Close Run",
+        "description": "Close the run: its results are fixed. Testing again is a new run.",
+        "operationId": "close_run_test_runs__run_id__close_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-run-cases/{run_case_id}": {
+      "patch": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Update Run Case",
+        "description": "A case's result in a run -- passed, failed, blocked or skipped, with a\nnote and the step that failed -- or who is to run it.",
+        "operationId": "update_run_case_test_run_cases__run_case_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestRunCaseUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunCaseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-run-cases/{run_case_id}/bug": {
+      "post": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Raise Bug",
+        "description": "Raise a bug from a failure: the ticket, linked to the stories the case\ncovers, and the result linked to it.",
+        "operationId": "raise_bug_test_run_cases__run_case_id__bug_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-run-cases/{run_case_id}/files": {
+      "post": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Add File",
+        "description": "A file with a result: the screenshot of what happened.",
+        "operationId": "add_file_test_run_cases__run_case_id__files_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Run Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_file_test_run_cases__run_case_id__files_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResultFileRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-result-files/{result_file_id}/content": {
+      "get": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Download File",
+        "description": "The bytes, served as a ticket's attachments are.",
+        "operationId": "download_file_test_result_files__result_file_id__content_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "result_file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Result File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-result-files/{result_file_id}": {
+      "delete": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Delete File",
+        "operationId": "delete_file_test_result_files__result_file_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "result_file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Result File Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/test-cases/{case_id}/runs": {
+      "get": {
+        "tags": [
+          "test runs"
+        ],
+        "summary": "Case Runs",
+        "description": "Every run a case has been in, newest first, with the version each ran.",
+        "operationId": "case_runs_test_cases__case_id__runs_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseRun"
+                  },
+                  "title": "Response Case Runs Test Cases  Case Id  Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/search": {
       "get": {
         "tags": [
@@ -17539,6 +18202,21 @@
         ],
         "title": "BatchTotal"
       },
+      "Body_add_file_test_run_cases__run_case_id__files_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "The file, with the result."
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_add_file_test_run_cases__run_case_id__files_post"
+      },
       "Body_attach_receipt_expenses__expense_id__receipt_put": {
         "properties": {
           "file": {
@@ -17869,6 +18547,34 @@
         "type": "object",
         "title": "BudgetUpdate",
         "description": "Leaving a field out leaves it alone."
+      },
+      "BugRef": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "status"
+        ],
+        "title": "BugRef",
+        "description": "The bug a failure raised, as a run lists it."
       },
       "BulkInviteCreate": {
         "properties": {
@@ -18274,6 +18980,72 @@
           "people"
         ],
         "title": "CapacityUpdate"
+      },
+      "CaseRun": {
+        "properties": {
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "run_name": {
+            "type": "string",
+            "title": "Run Name"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestRunState"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ran_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ran_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ran At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "run_name",
+          "state",
+          "version",
+          "created_at"
+        ],
+        "title": "CaseRun",
+        "description": "A run a case has been in (#275): its history, newest first."
       },
       "ChannelSetting": {
         "properties": {
@@ -28277,6 +29049,16 @@
             "type": "array",
             "title": "Covers"
           },
+          "last_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -28541,6 +29323,594 @@
           "name"
         ],
         "title": "TestFolderUpdate"
+      },
+      "TestResult": {
+        "type": "string",
+        "enum": [
+          "passed",
+          "failed",
+          "blocked",
+          "skipped"
+        ],
+        "title": "TestResult",
+        "description": "What happened when a case was run (#275). No result is \"not run yet\"."
+      },
+      "TestResultFileRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "content_type",
+          "size_bytes",
+          "created_at"
+        ],
+        "title": "TestResultFileRead"
+      },
+      "TestRunCaseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "integer",
+            "title": "Run Id"
+          },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "identifier": {
+            "type": "string",
+            "title": "Identifier"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/TestStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "covers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Covers"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "failed_step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Step"
+          },
+          "ran_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ran_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ran At"
+          },
+          "bug": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BugRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/TestResultFileRead"
+            },
+            "type": "array",
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "case_id",
+          "identifier",
+          "version",
+          "title",
+          "steps",
+          "covers",
+          "files"
+        ],
+        "title": "TestRunCaseRead",
+        "description": "One case in a run: what was run, by whom, and what happened."
+      },
+      "TestRunCaseUpdate": {
+        "properties": {
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "failed_step": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Step"
+          }
+        },
+        "type": "object",
+        "title": "TestRunCaseUpdate",
+        "description": "A result, or who is to run it. Fields left out are left alone; an\nexplicit null result is \"not run yet\" again."
+      },
+      "TestRunCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Id"
+          },
+          "sprint_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprint Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "label_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Id"
+          },
+          "case_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Case Ids",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TestRunCreate",
+        "description": "A run of the team's cases (#275): what it is for, where, and which\ncases -- a folder's, a label's and any picked by hand, together. Retired\ncases are left out."
+      },
+      "TestRunDetail": {
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/TestRunRead"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/TestRunCaseRead"
+            },
+            "type": "array",
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run",
+          "cases"
+        ],
+        "title": "TestRunDetail"
+      },
+      "TestRunProgress": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "blocked": {
+            "type": "integer",
+            "title": "Blocked"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "not_run": {
+            "type": "integer",
+            "title": "Not Run"
+          },
+          "bugs": {
+            "type": "integer",
+            "title": "Bugs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "passed",
+          "failed",
+          "blocked",
+          "skipped",
+          "not_run",
+          "bugs"
+        ],
+        "title": "TestRunProgress",
+        "description": "How far a run has got: how many passed, failed, were blocked or\nskipped and are not run yet, and how many bugs it raised."
+      },
+      "TestRunRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "team_id": {
+            "type": "integer",
+            "title": "Team Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Id"
+          },
+          "sprint_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprint Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UserPublic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/TestRunState"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/TestRunProgress"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "team_id",
+          "name",
+          "state",
+          "progress",
+          "created_at"
+        ],
+        "title": "TestRunRead"
+      },
+      "TestRunState": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "TestRunState",
+        "description": "A run is open while it is being run, and closed when it is finished\n(#275): then its results are fixed, and testing again is a new run."
+      },
+      "TestRunUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Id"
+          },
+          "sprint_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sprint Id"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          }
+        },
+        "type": "object",
+        "title": "TestRunUpdate",
+        "description": "Every field optional; an explicit null clears what it is for."
       },
       "TestStep": {
         "properties": {
@@ -28936,7 +30306,8 @@
           "fix_version",
           "severity",
           "environment",
-          "found_in"
+          "found_in",
+          "test_result"
         ],
         "title": "TicketEventField",
         "description": "Which field a TicketEvent records a change to."
@@ -29624,6 +30995,16 @@
           },
           "state": {
             "$ref": "#/components/schemas/TestCaseState"
+          },
+          "last_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -32007,6 +33388,9 @@
           "release_not_found",
           "test_case_not_found",
           "test_folder_not_found",
+          "test_run_not_found",
+          "test_run_case_not_found",
+          "test_result_file_not_found",
           "status_not_found",
           "label_not_found",
           "not_in_trash",
@@ -32080,6 +33464,10 @@
           "environment_not_on_team",
           "environments_invalid",
           "test_cases_import_invalid",
+          "test_case_has_runs",
+          "test_run_closed",
+          "test_run_empty",
+          "test_result_not_failed",
           "link_to_self",
           "parent_is_self",
           "parent_other_team",

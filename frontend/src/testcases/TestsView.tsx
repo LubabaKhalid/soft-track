@@ -19,6 +19,7 @@ import { CaseDetail, CaseStateChip } from '@/testcases/CaseDetail'
 import { CaseEditor } from '@/testcases/CaseEditor'
 import { invalidateCases } from '@/testcases/cases'
 import { ImportCasesDialog } from '@/testcases/ImportCasesDialog'
+import { ResultChip } from '@/testcases/ResultChip'
 import { TicketActionsMenu } from '@/tickets/detail/TicketActionsMenu'
 import { Icon } from '@/ui/Icon'
 import { Loading } from '@/ui/Loading'
@@ -38,16 +39,23 @@ export function TestsView({
   runs,
   caseExtra,
   main,
+  onShelf,
 }: {
   runs?: ReactNode
   caseExtra?: (testCase: TestCaseRead) => ReactNode
   /** Shown in place of the cases and the case: a run, opened from the left. */
   main?: ReactNode
+  /** A folder was chosen: whatever `main` was showing gives way to it. */
+  onShelf?: () => void
 } = {}) {
   const { t } = useTranslation(['tests', 'common'])
   const { team, labels } = useTeamContext()
   const canWrite = useCanWrite()
-  const [shelf, setShelf] = useState<Shelf>({ kind: 'all' })
+  const [shelf, setShelfState] = useState<Shelf>({ kind: 'all' })
+  const setShelf = (next: Shelf) => {
+    setShelfState(next)
+    onShelf?.()
+  }
   const [query, setQuery] = useState('')
   const q = useDebounced(query.trim(), 250)
   const [labelId, setLabelId] = useState<number | null>(null)
@@ -242,6 +250,11 @@ export function TestsView({
                         </span>
                       )}
                       <CaseStateChip state={testCase.state} />
+                      {/* Its last result in a run (#275), beside it: a
+                          retired case has left the runs. */}
+                      {runs && testCase.state !== 'retired' && (
+                        <ResultChip result={testCase.last_result} />
+                      )}
                     </button>
                   </li>
                 ))}

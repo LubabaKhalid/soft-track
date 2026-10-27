@@ -151,6 +151,28 @@ class TestCaseState(str, enum.Enum):
     retired = "retired"
 
 
+class TestRunState(str, enum.Enum):
+    """A run is open while it is being run, and closed when it is finished
+    (#275): then its results are fixed, and testing again is a new run."""
+
+    __test__ = False
+
+    open = "open"
+    closed = "closed"
+
+
+class TestResult(str, enum.Enum):
+    """What happened when a case was run (#275). No result is "not run yet"."""
+
+    __test__ = False
+
+    passed = "passed"
+    failed = "failed"
+    #: Could not be run: waiting on something else.
+    blocked = "blocked"
+    skipped = "skipped"
+
+
 #: Where a bug can be found, until a team says otherwise (#273).
 DEFAULT_ENVIRONMENTS: tuple[str, ...] = ("Production", "Staging", "Development")
 
@@ -313,6 +335,12 @@ class TicketEventField(str, enum.Enum):
     severity = "severity"
     environment = "environment"
     found_in = "found_in"
+    #: A test result on the bug it raised (#275): the bug's raising, and each
+    #: result of that case in that run after it. Written as it was --
+    #: `result|TC-05|1.4.0 regression` -- so the line survives the run being
+    #: renamed or the case changed, as a schedule's name does. The raising
+    #: is the result `raised`.
+    test_result = "test_result"
 
 
 class DueFilter(str, enum.Enum):
@@ -1486,6 +1514,83 @@ class TestCaseTicket(SQLModel, table=True):
 
     case_id: int = Field(foreign_key="testcase.id", primary_key=True)
     ticket_id: int = Field(foreign_key="ticket.id", primary_key=True, index=True)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TestRun(SQLModel, table=True):
+    """A pass through a team's test cases (#275): that it was done, by whom,
+    against what, and what happened.
+
+    For a release, a sprint or an epic -- or none of them -- in an
+    environment, owned by somebody. Its cases are chosen when it is made, by
+    folder, by label or by hand, and copied in as `TestRunCase` rows; the
+    run is what was run, whatever happens to the folder afterwards.
+    """
+
+    __test__ = False
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    team_id: int = Field(foreign_key="team.id", index=True)
+    name: str
+    release_id: Optional[int] = Field(
+        default=None, foreign_key="release.id", index=True
+    )
+    sprint_id: Optional[int] = Field(default=None, foreign_key="sprint.id", index=True)
+    project_id: Optional[int] = Field(
+        default=None, foreign_key="project.id", index=True
+    )
+    #: One of the team's environments (#273), as it was spelt then.
+    environment: Optional[str] = None
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    state: TestRunState = Field(default=TestRunState.open, index=True)
+    created_by_id: int = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=utcnow)
+    closed_at: Optional[datetime] = None
+    closed_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+
+class TestRunCase(SQLModel, table=True):
+    """One case in one run, and its result (#275).
+
+    `version` is the version of the case's text that was run: the version it
+    had when the run was made, and the one it had when a result was given.
+    A result from March says what was tested in March.
+    """
+
+    __test__ = False
+    __table_args__ = (UniqueConstraint("run_id", "case_id", name="uq_test_run_case"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: int = Field(foreign_key="testrun.id", index=True)
+    case_id: int = Field(foreign_key="testcase.id", index=True)
+    version: int
+    #: Who is to run it.
+    assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    #: Null until it is run.
+    result: Optional[TestResult] = Field(default=None, index=True)
+    note: Optional[str] = None
+    #: Which step failed, counting from 1.
+    failed_step: Optional[int] = None
+    ran_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    ran_at: Optional[datetime] = Field(default=None, index=True)
+    #: The bug a failure raised.
+    bug_id: Optional[int] = Field(default=None, foreign_key="ticket.id", index=True)
+
+
+class TestResultFile(SQLModel, table=True):
+    """A file with a result (#275): the screenshot of the blank PDF. Checked
+    and stored as a ticket's attachments are, kept apart from them because a
+    result belongs to a run rather than to a ticket."""
+
+    __test__ = False
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_case_id: int = Field(foreign_key="testruncase.id", index=True)
+    filename: str
+    content_type: str
+    size_bytes: int
+    storage_key: str
+    uploaded_by_id: int = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=utcnow)
 
 

@@ -34,6 +34,7 @@ export * from './statuses/statuses';
 export * from './teams/teams';
 export * from './templates/templates';
 export * from './test-cases/test-cases';
+export * from './test-runs/test-runs';
 export * from './tickets/tickets';
 export * from './time-estimates/time-estimates';
 export * from './timesheet/timesheet';
