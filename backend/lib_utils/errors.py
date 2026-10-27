@@ -184,6 +184,12 @@ class ErrorCode(str, enum.Enum):
     #: Marking a release released by hand, which releasing does -- it asks
     #: what to do with the tickets that are not done (#272).
     release_not_released = "release_not_released"
+    #: Severity, environment or found in on a ticket that is not a bug (#273).
+    bug_details_need_a_bug = "bug_details_need_a_bug"
+    #: An environment the team does not have (#273).
+    environment_not_on_team = "environment_not_on_team"
+    #: A team's list of environments with a repeat, or a blank (#273).
+    environments_invalid = "environments_invalid"
     link_to_self = "link_to_self"
     parent_is_self = "parent_is_self"
     parent_other_team = "parent_other_team"

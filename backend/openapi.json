@@ -4656,6 +4656,87 @@
               "title": "Fix Version Exclude"
             },
             "description": "Every ticket except those the filter matches."
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              "description": "Only bugs of one of these severities (#273).",
+              "default": [],
+              "title": "Severity"
+            },
+            "description": "Only bugs of one of these severities (#273)."
+          },
+          {
+            "name": "severity_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Severity Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only bugs found in one of these environments.",
+              "default": [],
+              "title": "Environment"
+            },
+            "description": "Only bugs found in one of these environments."
+          },
+          {
+            "name": "environment_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Environment Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "found_in_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Only bugs found in one of these releases.",
+              "default": [],
+              "title": "Found In Id"
+            },
+            "description": "Only bugs found in one of these releases."
+          },
+          {
+            "name": "found_in_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Found In Exclude"
+            },
+            "description": "Every bug except those the filter matches."
           }
         ],
         "responses": {
@@ -5283,6 +5364,87 @@
               "title": "Fix Version Exclude"
             },
             "description": "Every ticket except those the filter matches."
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              "description": "Only bugs of one of these severities (#273).",
+              "default": [],
+              "title": "Severity"
+            },
+            "description": "Only bugs of one of these severities (#273)."
+          },
+          {
+            "name": "severity_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Severity Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only bugs found in one of these environments.",
+              "default": [],
+              "title": "Environment"
+            },
+            "description": "Only bugs found in one of these environments."
+          },
+          {
+            "name": "environment_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Environment Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "found_in_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Only bugs found in one of these releases.",
+              "default": [],
+              "title": "Found In Id"
+            },
+            "description": "Only bugs found in one of these releases."
+          },
+          {
+            "name": "found_in_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Found In Exclude"
+            },
+            "description": "Every bug except those the filter matches."
           }
         ],
         "responses": {
@@ -7388,6 +7550,66 @@
         }
       }
     },
+    "/teams/{team_id}/open-bugs-by-severity": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Team Open Bugs By Severity",
+        "description": "The bugs open at the end of each week, by severity (#273).",
+        "operationId": "team_open_bugs_by_severity_teams__team_id__open_bugs_by_severity_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Team Id"
+            }
+          },
+          {
+            "name": "weeks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 52,
+              "minimum": 1,
+              "default": 8,
+              "title": "Weeks"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenBugsBySeverity"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sprints/{sprint_id}/time-spent": {
       "get": {
         "tags": [
@@ -8428,6 +8650,87 @@
               "title": "Fix Version Exclude"
             },
             "description": "Every ticket except those the filter matches."
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              "description": "Only bugs of one of these severities (#273).",
+              "default": [],
+              "title": "Severity"
+            },
+            "description": "Only bugs of one of these severities (#273)."
+          },
+          {
+            "name": "severity_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Severity Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Only bugs found in one of these environments.",
+              "default": [],
+              "title": "Environment"
+            },
+            "description": "Only bugs found in one of these environments."
+          },
+          {
+            "name": "environment_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Environment Exclude"
+            },
+            "description": "Every bug except those the filter matches."
+          },
+          {
+            "name": "found_in_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "Only bugs found in one of these releases.",
+              "default": [],
+              "title": "Found In Id"
+            },
+            "description": "Only bugs found in one of these releases."
+          },
+          {
+            "name": "found_in_exclude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Every bug except those the filter matches.",
+              "default": false,
+              "title": "Found In Exclude"
+            },
+            "description": "Every bug except those the filter matches."
           }
         ],
         "responses": {
@@ -19013,6 +19316,20 @@
             "type": "array",
             "title": "Projects Created"
           },
+          "releases_created": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Releases Created"
+          },
+          "environments_added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Environments Added"
+          },
           "users": {
             "items": {
               "$ref": "#/components/schemas/UserMatch"
@@ -19058,6 +19375,8 @@
           "comments_created",
           "labels_created",
           "projects_created",
+          "releases_created",
+          "environments_added",
           "users",
           "unmapped_statuses",
           "unmapped_priorities",
@@ -20329,6 +20648,63 @@
         "title": "OAuthProvider",
         "description": "An identity provider somebody can sign in with.\n\nTwo, and closed on purpose. Each one is a different set of quirks rather\nthan a row of configuration -- see `lib_identity/oauth_providers.py` -- and\na self-hosted instance that configures neither keeps email and password\nwith no external dependency at all. Unrelated to `GitProvider`: that is a\nrepository SoftTrack is told about, this is a way into an account."
       },
+      "OpenBugsBySeverity": {
+        "properties": {
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/OpenBugsWeek"
+            },
+            "type": "array",
+            "title": "Weeks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "weeks"
+        ],
+        "title": "OpenBugsBySeverity",
+        "description": "What is open at the end of each week, oldest week first. The week\nunder way is counted up to now."
+      },
+      "OpenBugsWeek": {
+        "properties": {
+          "week_of": {
+            "type": "string",
+            "format": "date",
+            "title": "Week Of"
+          },
+          "critical": {
+            "type": "integer",
+            "title": "Critical"
+          },
+          "major": {
+            "type": "integer",
+            "title": "Major"
+          },
+          "minor": {
+            "type": "integer",
+            "title": "Minor"
+          },
+          "trivial": {
+            "type": "integer",
+            "title": "Trivial"
+          },
+          "unrated": {
+            "type": "integer",
+            "title": "Unrated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week_of",
+          "critical",
+          "major",
+          "minor",
+          "trivial",
+          "unrated"
+        ],
+        "title": "OpenBugsWeek",
+        "description": "The bugs open at the end of one week, by how bad (#273)."
+      },
       "OutboundWebhookCreate": {
         "properties": {
           "url": {
@@ -21040,6 +21416,43 @@
             "type": "array",
             "title": "Comments",
             "default": []
+          },
+          "fix_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fix Versions",
+            "default": []
+          },
+          "affects_versions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affects Versions",
+            "default": []
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
           }
         },
         "type": "object",
@@ -23603,7 +24016,13 @@
               "watching": false,
               "has_no": [],
               "fix_version_id": [],
-              "fix_version_exclude": false
+              "fix_version_exclude": false,
+              "severity": [],
+              "severity_exclude": false,
+              "environment": [],
+              "environment_exclude": false,
+              "found_in_id": [],
+              "found_in_exclude": false
             }
           },
           "group_by": {
@@ -26276,6 +26695,18 @@
             "title": "Capacity Minutes Per Day",
             "default": 360
           },
+          "environments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Environments",
+            "default": [
+              "Production",
+              "Staging",
+              "Development"
+            ]
+          },
           "listed": {
             "type": "boolean",
             "title": "Listed",
@@ -26555,6 +26986,20 @@
             ],
             "title": "Capacity Minutes Per Day"
           },
+          "environments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environments"
+          },
           "listed": {
             "anyOf": [
               {
@@ -26659,6 +27104,28 @@
               }
             ],
             "title": "Fix Version Id"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
           },
           "add_label_ids": {
             "items": {
@@ -26834,6 +27301,39 @@
             ],
             "title": "Fix Version Id"
           },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "found_in_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found In Id"
+          },
           "due_date": {
             "anyOf": [
               {
@@ -26908,7 +27408,10 @@
           "schedule",
           "time_estimate",
           "remaining",
-          "fix_version"
+          "fix_version",
+          "severity",
+          "environment",
+          "found_in"
         ],
         "title": "TicketEventField",
         "description": "Which field a TicketEvent records a change to."
@@ -27006,7 +27509,9 @@
         "enum": [
           "status",
           "project",
-          "release"
+          "release",
+          "severity",
+          "environment"
         ],
         "title": "TicketGrouping",
         "description": "What the board's columns, and the list's sections, are made of.\n\nA saved view stores one (#63), so \"the planning view\" can open grouped by\nproject while \"my bugs\" opens by status. Status is the default because it\nis what the board always was."
@@ -27293,6 +27798,38 @@
             ],
             "title": "Fix Version Id"
           },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "found_in_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found In Id"
+          },
           "due_date": {
             "anyOf": [
               {
@@ -27407,6 +27944,17 @@
         ],
         "title": "TicketRead"
       },
+      "TicketSeverity": {
+        "type": "string",
+        "enum": [
+          "critical",
+          "major",
+          "minor",
+          "trivial"
+        ],
+        "title": "TicketSeverity",
+        "description": "How bad a bug is (#273), worst first.\n\nSeparate from priority, which says how soon: a typo on the pricing page\nis trivial and urgent. Optional, and only a bug has one -- a ticket made\na task keeps the value, unshown and unfiltered, until it is a bug again."
+      },
       "TicketSort": {
         "type": "string",
         "enum": [
@@ -27415,7 +27963,8 @@
           "priority",
           "estimate",
           "title",
-          "rank"
+          "rank",
+          "severity"
         ],
         "title": "TicketSort",
         "description": "What the ticket list can be ordered by (#88)."
@@ -27767,6 +28316,39 @@
               }
             ],
             "title": "Fix Version Id"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TicketSeverity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "found_in_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found In Id"
           },
           "due_date": {
             "anyOf": [
@@ -29223,6 +29805,45 @@
             "type": "boolean",
             "title": "Fix Version Exclude",
             "default": false
+          },
+          "severity": {
+            "items": {
+              "$ref": "#/components/schemas/TicketSeverity"
+            },
+            "type": "array",
+            "title": "Severity",
+            "default": []
+          },
+          "severity_exclude": {
+            "type": "boolean",
+            "title": "Severity Exclude",
+            "default": false
+          },
+          "environment": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Environment",
+            "default": []
+          },
+          "environment_exclude": {
+            "type": "boolean",
+            "title": "Environment Exclude",
+            "default": false
+          },
+          "found_in_id": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Found In Id",
+            "default": []
+          },
+          "found_in_exclude": {
+            "type": "boolean",
+            "title": "Found In Exclude",
+            "default": false
           }
         },
         "type": "object",
@@ -29876,6 +30497,9 @@
           "sprint_dates_invalid",
           "release_not_planned",
           "release_not_released",
+          "bug_details_need_a_bug",
+          "environment_not_on_team",
+          "environments_invalid",
           "link_to_self",
           "parent_is_self",
           "parent_other_team",

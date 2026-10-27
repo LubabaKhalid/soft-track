@@ -6,6 +6,7 @@ import type {
   TicketRead,
 } from '@/api/generated/models'
 import { releaseStateMeta } from '@/releases/releases'
+import { SEVERITY_META, SEVERITY_ORDER, severityOf } from '@/tickets/ticketMeta'
 
 /**
  * How the board is arranged: by status, as it always was, or by project (#63).
@@ -27,7 +28,12 @@ export type BoardGrouping = TicketGrouping
 const KEY = 'group'
 
 /** Every grouping but status, which is the board's own columns. */
-const GROUPINGS: readonly string[] = ['project', 'release'] satisfies BoardGrouping[]
+const GROUPINGS: readonly string[] = [
+  'project',
+  'release',
+  'severity',
+  'environment',
+] satisfies BoardGrouping[]
 
 export function groupingFromSearchParams(params: URLSearchParams): BoardGrouping {
   const asked = params.get(KEY) ?? ''
@@ -156,6 +162,8 @@ export type TicketGroup = {
 export type GroupLookups = {
   projects: ProjectRead[]
   releases?: readonly ReleaseRead[]
+  /** The team's environments (#273), in its order. */
+  environments?: readonly string[]
 }
 
 /** The groups for any grouping but status, which has the board's own columns. */
@@ -165,6 +173,10 @@ export function groupTickets(
   lookups: GroupLookups,
   options: { includeEmpty: boolean },
 ): TicketGroup[] {
+  if (grouping === 'severity') return groupBySeverity(tickets, options)
+  if (grouping === 'environment') {
+    return groupByEnvironment(tickets, lookups.environments ?? [], options)
+  }
   if (grouping === 'release') {
     return groupByRelease(tickets, lookups.releases ?? [], options).map((group) => ({
       key: group.key,
@@ -181,4 +193,62 @@ export function groupTickets(
     tickets: group.tickets,
     change: { project_id: group.project?.id ?? null },
   }))
+}
+
+/**
+ * A bug's details as columns (#273): one per severity, worst first, then
+ * the tickets with none -- every ticket that is not a bug among them, since
+ * a severity kept from when it was one is not shown. A drop sets the
+ * severity, so a task dropped on Critical is refused as a bug's detail.
+ */
+function groupBySeverity(
+  tickets: TicketRead[],
+  { includeEmpty }: { includeEmpty: boolean },
+): TicketGroup[] {
+  const groups: TicketGroup[] = SEVERITY_ORDER.map((severity) => ({
+    key: `severity:${severity}`,
+    name: SEVERITY_META[severity].label,
+    color: SEVERITY_META[severity].color,
+    tickets: tickets.filter((ticket) => severityOf(ticket) === severity),
+    change: { severity },
+  }))
+  const unrated = tickets.filter((ticket) => severityOf(ticket) === null)
+  return [
+    ...groups.filter((group) => includeEmpty || group.tickets.length > 0),
+    ...(includeEmpty || unrated.length > 0
+      ? [{ key: 'severity:none', name: null, color: null, tickets: unrated, change: { severity: null } }]
+      : []),
+  ]
+}
+
+/**
+ * One column per environment the team has, in its order, and one for an
+ * environment a bug kept after the team took it off its list -- then the
+ * tickets in none, which are every ticket that is not a bug as well.
+ */
+function groupByEnvironment(
+  tickets: TicketRead[],
+  environments: readonly string[],
+  { includeEmpty }: { includeEmpty: boolean },
+): TicketGroup[] {
+  const of = (ticket: TicketRead) =>
+    ticket.type === 'bug' ? (ticket.environment ?? null) : null
+  const kept = tickets
+    .map(of)
+    .filter((name): name is string => name !== null && !environments.includes(name))
+  const names = [...environments, ...kept.filter((name, index) => kept.indexOf(name) === index)]
+  const groups: TicketGroup[] = names.map((name) => ({
+    key: `environment:${name}`,
+    name,
+    color: 'var(--color-accent-sky)',
+    tickets: tickets.filter((ticket) => of(ticket) === name),
+    change: { environment: name },
+  }))
+  const none = tickets.filter((ticket) => of(ticket) === null)
+  return [
+    ...groups.filter((group) => includeEmpty || group.tickets.length > 0),
+    ...(includeEmpty || none.length > 0
+      ? [{ key: 'environment:none', name: null, color: null, tickets: none, change: { environment: null } }]
+      : []),
+  ]
 }

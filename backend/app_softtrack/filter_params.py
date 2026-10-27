@@ -24,12 +24,15 @@ from lib_softtrack.tables import (
     DateWindow,
     DueFilter,
     LabelMatch,
+    TicketSeverity,
     MissingField,
     TicketPriority,
     TicketType,
 )
 
 _EXCLUDE = "Every ticket except those the filter matches."
+#: A bug's details narrow to bugs either way round (#273).
+_BUG_EXCLUDE = "Every bug except those the filter matches."
 
 
 def ticket_filters(
@@ -108,6 +111,18 @@ def ticket_filters(
         [], description="Only tickets shipping in one of these releases (#272)."
     ),
     fix_version_exclude: bool = Query(False, description=_EXCLUDE),
+    severity: list[TicketSeverity] = Query(
+        [], description="Only bugs of one of these severities (#273)."
+    ),
+    severity_exclude: bool = Query(False, description=_BUG_EXCLUDE),
+    environment: list[str] = Query(
+        [], description="Only bugs found in one of these environments."
+    ),
+    environment_exclude: bool = Query(False, description=_BUG_EXCLUDE),
+    found_in_id: list[int] = Query(
+        [], description="Only bugs found in one of these releases."
+    ),
+    found_in_exclude: bool = Query(False, description=_BUG_EXCLUDE),
 ) -> ViewFilters:
     try:
         # Every parameter above, by name: they are ViewFilters' own names.

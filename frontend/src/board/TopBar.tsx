@@ -142,6 +142,9 @@ export function TopBar({
           {(releases.length > 0 || grouping === 'release') && (
             <option value="release">{t('arrange.grouping.release')}</option>
           )}
+          {/* A bug's details (#273). */}
+          <option value="severity">{t('arrange.grouping.severity')}</option>
+          <option value="environment">{t('arrange.grouping.environment')}</option>
         </Select>
       )}
 

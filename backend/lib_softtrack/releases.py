@@ -19,7 +19,7 @@ version that has already gone out without it.
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlmodel import Session, select
 
 from lib_softtrack.history import record_changes, snapshot
@@ -374,23 +374,34 @@ def delete_release(session: Session, current_user: User, release_id: int) -> Non
     release = get_release_or_404(session, release_id)
     require_team_member(release.team_id, current_user, session)
 
-    # The trash too: a ticket restored later must not point at nothing.
+    # The trash too: a ticket restored later must not point at nothing. A bug
+    # found in it (#273) forgets that as well.
     for ticket in session.exec(
         select(Ticket)
-        .where(Ticket.fix_version_id == release_id)
+        .where(
+            or_(Ticket.fix_version_id == release_id, Ticket.found_in_id == release_id)
+        )
         .execution_options(**INCLUDE_TRASHED)
     ).all():
         before = snapshot(ticket)
-        ticket.fix_version_id = None
+        if ticket.fix_version_id == release_id:
+            ticket.fix_version_id = None
+        if ticket.found_in_id == release_id:
+            ticket.found_in_id = None
         session.add(ticket)
         record_changes(session, ticket, before, current_user)
 
     for view in session.exec(
         select(SavedView).where(SavedView.team_id == release.team_id)
     ).all():
-        if release_id in (view.fix_version_ids or []):
+        if release_id in (view.fix_version_ids or []) or release_id in (
+            view.found_in_ids or []
+        ):
             view.fix_version_ids = [
                 other for other in view.fix_version_ids if other != release_id
+            ]
+            view.found_in_ids = [
+                other for other in view.found_in_ids if other != release_id
             ]
             session.add(view)
 

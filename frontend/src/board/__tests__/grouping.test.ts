@@ -145,3 +145,41 @@ describe('grouping by release (#272)', () => {
     ])
   })
 })
+
+describe('grouping by a bug’s details (#273)', () => {
+  const bug = (id: number, fields: Partial<TicketRead>) =>
+    ({ id, type: 'bug', severity: null, environment: null, ...fields }) as TicketRead
+
+  it('is a column per severity, worst first, with every non-bug in none', () => {
+    const tickets = [
+      bug(1, { severity: 'minor' }),
+      bug(2, { severity: 'critical' }),
+      // A task keeps the severity it had as a bug, and it is not shown.
+      { ...bug(3, { severity: 'critical' }), type: 'task' } as TicketRead,
+    ]
+    const groups = groupTickets('severity', tickets, { projects: [] }, { includeEmpty: false })
+    expect(groups.map((group) => [group.name, group.tickets.map((t) => t.id)])).toEqual([
+      ['Critical', [2]],
+      ['Minor', [1]],
+      [null, [3]],
+    ])
+    expect(groups[0].change).toEqual({ severity: 'critical' })
+  })
+
+  it('is a column per environment in the team’s order, and one a bug kept', () => {
+    const groups = groupTickets(
+      'environment',
+      [bug(1, { environment: 'Staging' }), bug(2, { environment: 'Demo' }), bug(3, {})],
+      { projects: [], environments: ['Production', 'Staging'] },
+      { includeEmpty: true },
+    )
+    expect(groups.map((group) => group.name)).toEqual(['Production', 'Staging', 'Demo', null])
+    expect(groups[1].change).toEqual({ environment: 'Staging' })
+    expect(groups[3].change).toEqual({ environment: null })
+  })
+
+  it('reads the groupings from a link', () => {
+    expect(groupingFromSearchParams(new URLSearchParams('group=severity'))).toBe('severity')
+    expect(groupingFromSearchParams(new URLSearchParams('group=environment'))).toBe('environment')
+  })
+})

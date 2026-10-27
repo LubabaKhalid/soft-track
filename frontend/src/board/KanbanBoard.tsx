@@ -199,6 +199,7 @@ function Column({
               // Whichever the columns already say is left off the card.
               showStatus={grouping !== 'status'}
               showProject={grouping !== 'project'}
+              showSeverity={grouping !== 'severity'}
             />
           ))}
         </SortableContext>
@@ -302,6 +303,7 @@ export function KanbanBoard({
   const [drag] = useState(() => ({ moved: false }))
   const { t } = useTranslation(['board', 'common'])
   const { team, statuses, projects, releases } = useTeamContext()
+  const environments = team.environments
   const [collapsed, setCollapsed] = useState<Set<string> | null>(null)
   // Seeded from the team's own columns on first render rather than in state's
   // initialiser: the statuses arrive with a query, so on the first pass there
@@ -324,7 +326,12 @@ export function KanbanBoard({
 
   const columns: BoardColumn[] =
     grouping !== 'status'
-      ? groupTickets(grouping, tickets, { projects, releases }, { includeEmpty: true }).map(
+      ? groupTickets(
+          grouping,
+          tickets,
+          { projects, releases, environments },
+          { includeEmpty: true },
+        ).map(
           (group) => ({
             id: group.key,
             name: group.name ?? t(`arrange.none.${grouping}`),

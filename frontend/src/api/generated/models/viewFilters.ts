@@ -10,6 +10,7 @@ import type { DueFilter } from './dueFilter';
 import type { LabelMatch } from './labelMatch';
 import type { MissingField } from './missingField';
 import type { TicketPriority } from './ticketPriority';
+import type { TicketSeverity } from './ticketSeverity';
 import type { TicketType } from './ticketType';
 
 /**
@@ -61,4 +62,10 @@ export interface ViewFilters {
   has_no?: MissingField[];
   fix_version_id?: number[];
   fix_version_exclude?: boolean;
+  severity?: TicketSeverity[];
+  severity_exclude?: boolean;
+  environment?: string[];
+  environment_exclude?: boolean;
+  found_in_id?: number[];
+  found_in_exclude?: boolean;
 }

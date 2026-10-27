@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from lib_identity.models.identity import UserPublic
 from lib_softtrack.tables import (
+    TicketSeverity,
     DateWindow,
     DueFilter,
     LabelMatch,
@@ -105,6 +106,14 @@ class ViewFilters(BaseModel):
     #: No release is `has_no: fix_version`.
     fix_version_id: list[int] = []
     fix_version_exclude: bool = False
+    #: A bug's details (#273), in the same shape. Each narrows to bugs: a
+    #: task that kept a severity from when it was one does not match.
+    severity: list[TicketSeverity] = []
+    severity_exclude: bool = False
+    environment: list[str] = []
+    environment_exclude: bool = False
+    found_in_id: list[int] = []
+    found_in_exclude: bool = False
 
     _lists = field_validator(
         "status_id",
@@ -115,6 +124,9 @@ class ViewFilters(BaseModel):
         "creator_id",
         "has_no",
         "fix_version_id",
+        "severity",
+        "environment",
+        "found_in_id",
         mode="before",
     )(_as_list)
 

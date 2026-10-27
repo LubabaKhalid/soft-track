@@ -20,6 +20,9 @@ export const filters = {
     hasNo: 'Has no',
     watching: 'Watching',
     release: 'Release',
+    severity: 'Severity',
+    environment: 'Environment',
+    foundIn: 'Found in',
   },
   /** The × beside each value in a chip: "Remove Mei Tanaka from the assignee filter". */
   removeValue: 'Remove {{value}} from the {{field}} filter',
@@ -37,6 +40,10 @@ export const filters = {
     type: 'Every type except these',
     creator: 'Everyone except these',
     release: 'Every release except these',
+    // A bug's details (#273) narrow to bugs either way round.
+    severity: 'Every bug except these',
+    environment: 'Every bug except these',
+    foundIn: 'Every bug except these',
   },
   /** The label filter's second question. */
   labelMatch: {
@@ -60,6 +67,9 @@ export const filters = {
     hasNo: 'Anything',
     watching: 'Watched or not',
     release: 'Any release',
+    severity: 'Any severity',
+    environment: 'Any environment',
+    foundIn: 'Found in any release',
   },
   unassigned: 'Unassigned',
   /** "Me" as a value of the assignee and created-by filters (#261): whoever is looking. */

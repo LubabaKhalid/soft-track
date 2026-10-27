@@ -28,7 +28,13 @@ import {
 import { useTranslation } from '@/i18n'
 import { DUE_FILTER_LABEL } from '@/tickets/dueDate'
 import { PriorityIcon } from '@/tickets/PriorityIcon'
-import { PRIORITY_ORDER, TYPE_META, TYPE_ORDER } from '@/tickets/ticketMeta'
+import {
+  PRIORITY_ORDER,
+  SEVERITY_META,
+  SEVERITY_ORDER,
+  TYPE_META,
+  TYPE_ORDER,
+} from '@/tickets/ticketMeta'
 import { activeMembers } from '@/team/members'
 import { pickableProjects } from '@/team/projects'
 import { pickableReleases } from '@/releases/releases'
@@ -60,6 +66,9 @@ const ANY_KEY = {
   hasNo: 'hasNo',
   watching: 'watching',
   release: 'release',
+  severity: 'severity',
+  environment: 'environment',
+  foundIn: 'foundIn',
 } as const satisfies Record<FilterKey, string>
 
 /**
@@ -109,7 +118,7 @@ export function FilterBar({
   // a link has set it, so it can be taken off again.
   const hasReleases = (lookups.releases ?? []).length > 0
   const sections = FILTER_KEYS.filter(
-    (key) => key !== 'release' || hasReleases || isSet(filters, key),
+    (key) => !(key === 'release' || key === 'foundIn') || hasReleases || isSet(filters, key),
   )
 
   return (
@@ -253,7 +262,7 @@ function onlyFilter(filters: BoardFilters, key: Section): BoardFilters {
 
 /** The values a filter offers, in the order the menu lists them. */
 function useOptions<K extends ManyKey>(name: K): FilterValue<K>[] {
-  const { members, labels, statuses, releases } = useTeamContext()
+  const { team, members, labels, statuses, releases } = useTeamContext()
   switch (name) {
     case 'status':
       return statuses.map((status) => status.id) as FilterValue<K>[]
@@ -272,8 +281,13 @@ function useOptions<K extends ManyKey>(name: K): FilterValue<K>[] {
     case 'label':
       return labels.map((label) => label.id) as FilterValue<K>[]
     case 'release':
+    case 'foundIn':
       // An archived release is not offered, like an archived epic.
       return pickableReleases(releases ?? []).map((release) => release.id) as FilterValue<K>[]
+    case 'severity':
+      return SEVERITY_ORDER as FilterValue<K>[]
+    case 'environment':
+      return (team.environments ?? []) as FilterValue<K>[]
     default:
       return TYPE_ORDER as FilterValue<K>[]
   }
@@ -399,6 +413,16 @@ function OptionMark<K extends ManyKey>({ name, value }: { name: K; value: Filter
   if (name === 'type') {
     const meta = TYPE_META[value as FilterValue<'type'>]
     return <Icon name={meta.icon} size={13} style={{ color: meta.color }} />
+  }
+  if (name === 'severity') {
+    const color = SEVERITY_META[value as FilterValue<'severity'>].color
+    return (
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ background: color }}
+      />
+    )
   }
   return null
 }

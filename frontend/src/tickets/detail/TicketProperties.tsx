@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import {
   type TicketPriority,
   type TicketRead,
+  type TicketSeverity,
   type TicketType,
   type TicketUpdate,
 } from '@/api/generated/models'
@@ -11,6 +12,8 @@ import {
   ESTIMATE_SCALE,
   PRIORITY_META,
   PRIORITY_ORDER,
+  SEVERITY_META,
+  SEVERITY_ORDER,
   TYPE_META,
   TYPE_ORDER,
 } from '@/tickets/ticketMeta'
@@ -47,6 +50,40 @@ export function TicketProperties({
   // A team that has made no release is asked nothing about one (#272); a
   // ticket that already ships in one keeps showing it.
   const showFixVersion = releases.length > 0 || ticket.fix_version_id != null
+  // A bug's details (#273) after its type, as a bug's properties: the
+  // values a ticket of another type kept are not shown until it is a bug.
+  const isBug = ticket.type === 'bug'
+  const environments = [
+    ...(team.environments ?? []),
+    ...(ticket.environment && !(team.environments ?? []).includes(ticket.environment)
+      ? [ticket.environment]
+      : []),
+  ]
+
+  const releaseSelect = (
+    field: 'fix_version_id' | 'found_in_id',
+    dataField: string,
+    label: string,
+  ) => (
+    <Row label={label}>
+      <Select
+        dense
+        data-field={dataField}
+        aria-label={label}
+        value={ticket[field] ?? ''}
+        onChange={(e) => patch({ [field]: e.target.value ? Number(e.target.value) : null })}
+      >
+        <option value="">{t('releases:ticket.none')}</option>
+        {/* Archived releases are not offered, but the one this ticket
+            already names stays listed. */}
+        {pickableReleases(releases, ticket[field]).map((release) => (
+          <option key={release.id} value={release.id}>
+            {release.name}
+          </option>
+        ))}
+      </Select>
+    </Row>
+  )
   // What the team estimates in (#268). A ticket that already has the other
   // kind keeps showing it, so it can be read and cleared.
   const unit = team.estimate_unit ?? 'points'
@@ -108,6 +145,51 @@ export function TicketProperties({
         </Select>
       </Row>
 
+      {isBug && (
+        <>
+          <Row label={t('properties.severity')}>
+            <Select
+              dense
+              data-field="severity"
+              aria-label={t('properties.severity')}
+              value={ticket.severity ?? ''}
+              onChange={(e) =>
+                patch({ severity: (e.target.value || null) as TicketSeverity | null })
+              }
+            >
+              <option value="">{t('properties.noSeverity')}</option>
+              {SEVERITY_ORDER.map((severity) => (
+                <option key={severity} value={severity}>
+                  {SEVERITY_META[severity].label}
+                </option>
+              ))}
+            </Select>
+          </Row>
+          <Row label={t('properties.environment')}>
+            <Select
+              dense
+              data-field="environment"
+              aria-label={t('properties.environment')}
+              value={ticket.environment ?? ''}
+              onChange={(e) => patch({ environment: e.target.value || null })}
+            >
+              <option value="">{t('properties.noEnvironment')}</option>
+              {environments.map((environment) => (
+                <option key={environment} value={environment}>
+                  {environment}
+                </option>
+              ))}
+            </Select>
+          </Row>
+          {/* Found in and fixed in: "is this fixed in what the customer
+              runs" answered by two releases. */}
+          {(showFixVersion || ticket.found_in_id != null) &&
+            releaseSelect('found_in_id', 'found-in', t('releases:ticket.foundIn'))}
+          {showFixVersion &&
+            releaseSelect('fix_version_id', 'fix-version', t('releases:ticket.fixedIn'))}
+        </>
+      )}
+
       {showPoints && (
         <Row label={t('properties.estimate')}>
           <Select
@@ -156,32 +238,10 @@ export function TicketProperties({
         </Select>
       </Row>
 
-      {showFixVersion && (
-        <Row
-          label={
-            // What a bug calls it: the release it is fixed in.
-            ticket.type === 'bug' ? t('releases:ticket.fixedIn') : t('releases:ticket.fixVersion')
-          }
-        >
-          <Select
-            dense
-            data-field="fix-version"
-            value={ticket.fix_version_id ?? ''}
-            onChange={(e) =>
-              patch({ fix_version_id: e.target.value ? Number(e.target.value) : null })
-            }
-          >
-            <option value="">{t('releases:ticket.none')}</option>
-            {/* Archived releases are not offered, but the one this ticket
-                ships in stays listed. */}
-            {pickableReleases(releases, ticket.fix_version_id).map((release) => (
-              <option key={release.id} value={release.id}>
-                {release.name}
-              </option>
-            ))}
-          </Select>
-        </Row>
-      )}
+      {/* A bug's is beside its found in, above. */}
+      {showFixVersion &&
+        !isBug &&
+        releaseSelect('fix_version_id', 'fix-version', t('releases:ticket.fixVersion'))}
 
       <Row label={t('properties.dueDate')}>
         <input
